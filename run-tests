@@ -130,16 +130,22 @@ _add_error_with_stderr() {
 }
 
 
-_start_mocking() {
-    local mock_dir="$tsk_artifacts_dir/test-mocks"
-    mkdir -p "$mock_dir"
-    export PATH="$mock_dir:$PATH"
-}
-
 mock() {
     local command="$1"
     local behavior="$2"
-    local executable="$tsk_artifacts_dir/test-mocks/$command"
+    local mock_dir="$tsk_artifacts_dir/test-mocks"
+    local executable="$mock_dir/$command"
+
+    # Create the mock directory and add it to PATH if needed
+    if [ ! -d "$mock_dir" ]; then
+        mkdir -p "$mock_dir"
+    fi
+    
+    # Add mock dir to PATH only when the first mock is created
+    if [[ ":$PATH:" != *":$mock_dir:"* ]]; then
+        export PATH="$mock_dir:$PATH"
+    fi
+
     cat > "$executable" << EOF
 #!/bin/bash
 $behavior
@@ -148,19 +154,12 @@ EOF
 }
 
 # at the end of the test, all mocks are removed
-# TODO: one day we might want to set up mocks for multiple tests
+# TODO: one day we might want to set up mocks once and
+# then run them in multiple tests.
 _cleanup_mocks() {
     rm -rf "$tsk_artifacts_dir/test-mocks"/* "$tsk_artifacts_dir/test-mocks"/.*
 }
 
-_stop_mocking(){
-    # no need to remove this dir from PATH because we're about to exit
-    rmdir "$tsk_artifacts_dir/test-mocks"
-    if [ $? -ne 0 ]; then
-        echo "Internal error: mock dir wasn't empty?! This is a bug, I'M OUT" >&4
-        exit 5
-    fi
-}
 
 
 end_test() {
@@ -295,7 +294,6 @@ start_testing() {
 
     # Initialize artifacts files
     touch "$tsk_artifacts_dir/test-stdout" "$tsk_artifacts_dir/test-stderr"
-    _start_mocking
 }
 
 # Returns the directory of the currently running testfile
@@ -314,7 +312,6 @@ framework_dir() {
 
 stop_testing() {
     end_test
-    _stop_mocking
 
     # Restore original stdout and stderr, etc
     exec 1>&3 2>&4
