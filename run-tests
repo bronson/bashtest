@@ -18,6 +18,25 @@
 # ignore stderr, you can do something like TODO: `stderr_matches .`
 #
 
+#: ## The Test Environment
+#:
+#: ### directories
+#:
+#: When a test is running, the current working directory is set
+#: to an empty scratch directory. The test should make no assumption
+#: about where this directory is stored; it might be in your project
+#: directory, it might be in /tmp, and it might be on a magic ramdisk
+#: somewhere.
+#:
+#: Your test can also access these directories:
+#: - testfile_dir: The directory containing the testfile.
+#:   For example, if you
+#:   have some sample data in a file next to the testfile, you can
+#:   specify it like this: `$(testfile_dir)/sample_data.txt`
+#: - framework_dir: The directory containing the run-tests script.
+#:   If you have a helper script in the same directory as the run-tests
+#:   script, you can include it like this: `$(framework_dir)/helper.sh`
+#:
 #: ## The Testfile
 #:
 #: Testfiles start by including the test framework:
@@ -32,7 +51,7 @@
 # accidentally leak any variables or non-api functions into the testfiles?
 
 # Store the path to the run-tests.sh script for later use
-tsk_runtest_path="$(readlink -f "${BASH_SOURCE[0]}")"
+tsk_framework_path="$(readlink -f "${BASH_SOURCE[0]}")"
 tsk_testfile_path=""  # Will be set when a testfile sources this script
 
 # Set the testfile path when this script is sourced
@@ -52,6 +71,7 @@ tsk_pass_count=0      # current number of tests passed
 tsk_fail_count=0      # current number of tests failed
 tsk_root_dir=""       # main test directory
 tsk_run_dir=""        # directory where tests run
+tsk_artifacts_dir=""  # directory for temporary test artifacts
 
 # these variables are reset every time a new test is run
 tsk_test_name=""      # the name of the test currently being run
@@ -105,21 +125,21 @@ _add_error() {
 
 _add_error_with_stderr() {
     _add_error "$@"
-    local snippet="$(head -n 20 ".test-stderr")"
+    local snippet="$(head -n 20 "$tsk_artifacts_dir/test-stderr")"
     tsk_test_messages="$tsk_test_messages"$'\n'"$(_blockquote "$snippet")"
 }
 
 
 _start_mocking() {
-    local mock_dir=".test-mocks"
-    mkdir "$mock_dir"
-    export PATH="$(pwd)/$mock_dir:$PATH"
+    local mock_dir="$tsk_artifacts_dir/test-mocks"
+    mkdir -p "$mock_dir"
+    export PATH="$mock_dir:$PATH"
 }
 
 mock() {
     local command="$1"
     local behavior="$2"
-    local executable=".test-mocks/$command"
+    local executable="$tsk_artifacts_dir/test-mocks/$command"
     cat > "$executable" << EOF
 #!/bin/bash
 $behavior
@@ -130,12 +150,12 @@ EOF
 # at the end of the test, all mocks are removed
 # TODO: one day we might want to set up mocks for multiple tests
 _cleanup_mocks() {
-    rm -rf .test-mocks/* .test-mocks/.*
+    rm -rf "$tsk_artifacts_dir/test-mocks"/* "$tsk_artifacts_dir/test-mocks"/.*
 }
 
 _stop_mocking(){
     # no need to remove this dir from PATH because we're about to exit
-    rmdir ".test-mocks"
+    rmdir "$tsk_artifacts_dir/test-mocks"
     if [ $? -ne 0 ]; then
         echo "Internal error: mock dir wasn't empty?! This is a bug, I'M OUT" >&4
         exit 5
@@ -146,7 +166,7 @@ _stop_mocking(){
 end_test() {
     _cleanup_mocks
 
-    if [ -s ".test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
+    if [ -s "$tsk_artifacts_dir/test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
         _add_error_with_stderr "test produced stderr:"
     fi
 
@@ -159,13 +179,18 @@ end_test() {
             tsk_fail_count=$((tsk_fail_count + 1))
             res="${RED}FAIL${NC}"
 
-            # If test failed, rename the run directory to preserve the state
-            cd "$tsk_orig_cwd"
+            # Since the test failed, rename the run directory to preserve the state
             local safe_name=$(echo "$tsk_test_name" | tr ' /\\:*?"<>|' '_')
-            mv "$tsk_run_dir" "$tsk_root_dir/failed-$safe_name"
-            mkdir -p "$tsk_run_dir"
-            cd "$tsk_run_dir"
-            touch ".test-stdout" ".test-stderr"
+            local failed_dir="$tsk_root_dir/failed-$safe_name"
+            mv "$tsk_run_dir" "$failed_dir"
+
+            # Move artifacts to the failed test directory with clear names
+            mkdir -p "$failed_dir"
+            mv "$tsk_artifacts_dir/test-stdout" "$failed_dir/FAILED-stdout.txt" 2>&4
+            mv "$tsk_artifacts_dir/test-stderr" "$failed_dir/FAILED-stderr.txt" 2>&4
+            if [ -d "$tsk_artifacts_dir/test-mocks" ]; then
+                mv "$tsk_artifacts_dir/test-mocks" "$failed_dir/FAILED-mocks" 2>&4
+            fi
         fi
 
         local errmsg=''
@@ -189,8 +214,11 @@ ensure() {
     tsk_stderr_checked=false
     tsk_total_count=$((tsk_total_count + 1))
 
-    # Redirect stdout and stderr to files in the run directory
-    exec 1>".test-stdout" 2>".test-stderr"
+    # Make sure artifacts directory exists
+    mkdir -p "$tsk_artifacts_dir"
+
+    # Redirect stdout and stderr to files in the artifacts directory
+    exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"
 
     # no newline, end_test will back up and print the result
     printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
@@ -209,7 +237,7 @@ stderr_contains() {
     local expected_text="$1"
 
     tsk_stderr_checked=true
-    if ! grep -q "$expected_text" ".test-stderr"; then
+    if ! grep -q "$expected_text" "$tsk_artifacts_dir/test-stderr"; then
         _add_error_with_stderr "stderr_contains line $(_line_number): stderr doesn't contain: '$expected_text'"
     fi
 }
@@ -220,7 +248,7 @@ stderr_contains() {
 # TODO: this is not great.
 stderr_is() {
     local expected_text="$1"
-    local actual_text=$(cat ".test-stderr")
+    local actual_text=$(cat "$tsk_artifacts_dir/test-stderr")
 
     echo -n "$expected_text" > /tmp/et
     echo -n "$actual_text" > /tmp/at
@@ -257,15 +285,16 @@ start_testing() {
     done
     tsk_root_dir="tsk-test-$(printf "%02d" $dir_num)"
     tsk_run_dir="$tsk_root_dir/run"
+    tsk_artifacts_dir="$tsk_root_dir/artifacts"
 
-    mkdir -p "$tsk_run_dir"
+    mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir"
     [ $? -ne 0 ] && exit 1   # error should already be printed
 
     # Change to the run directory
     cd "$tsk_run_dir"
 
-    # TODO: doesn't seem like this should be necessary...?
-    touch ".test-stdout" ".test-stderr"
+    # Initialize artifacts files
+    touch "$tsk_artifacts_dir/test-stdout" "$tsk_artifacts_dir/test-stderr"
     _start_mocking
 }
 
@@ -279,8 +308,8 @@ testfile_dir() {
 }
 
 # Returns the directory of the run-tests.sh script
-runtest_dir() {
-    dirname "$tsk_runtest_path"
+framework_dir() {
+    dirname "$tsk_framework_path"
 }
 
 stop_testing() {
