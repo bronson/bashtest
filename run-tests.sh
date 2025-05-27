@@ -2,9 +2,10 @@
 
 # Testing Shell Kit
 
-# Guidance:
-#  - Tests are meant to look and act like bash code. Totally familiar.
-#  - Testing is self-contained, nothing to install on the host.
+# Guiding Principles
+#
+#  - Tests are meant to look and act like bash code. Familiarity is key.
+#  - Testing is as self-contained as possible, nothing to install on the host.
 #  - Test output should contain enough information to see what went wrong.
 #  - the API should be clean and readable; no need to use things named _ or tsk_.
 #
@@ -17,18 +18,33 @@
 # ignore stderr, you can do something like TODO: `stderr_matches .`
 #
 
+#: ## The Testfile
+#:
+#: Testfiles start by including the test framework:
+#:
+#: ```bash
+#: source "$(dirname "$0")/../run-tests.sh"
+#: ```
+
+
+# we reserve the tsk_ prefix to prevent incurring any conflicts
+# with variables in the tests themselves. TODO: can we test if we
+# accidentally leak any variables or non-api functions into the testfiles?
+
 tsk_version="0.1"
 
-# reserving the tsk_ prefix ensures that there will be no conflicts
-# with variables in the tests themselves.
+# save the environment so it can be restored at the end
+tsk_orig_cwd=""       # original directory before testing started
+tsk_orig_path=""      # original PATH before testing started
+exec 3>&1 4>&2        # copy stdout and stderr to FDs 3 and 4
+
 tsk_total_count=0     # current number of tests run
 tsk_pass_count=0      # current number of tests passed
 tsk_fail_count=0      # current number of tests failed
 tsk_root_dir=""       # main test directory
 tsk_run_dir=""        # directory where tests run
-tsk_orig_cwd=""       # original directory before testing started
-tsk_orig_path=""      # original PATH before testing started
 
+# these variables are reset every time a new test is run
 tsk_test_name=""      # the name of the test currently being run
 tsk_test_errors=0     # the number of errors
 tsk_test_messages=""  # string containing a message for each error
