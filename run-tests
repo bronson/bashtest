@@ -141,6 +141,10 @@ mock() {
         mkdir -p "$mock_dir"
     fi
     
+    # Ensure we have an absolute path for the mock directory
+    mock_dir="$(readlink -f "$mock_dir")"
+    executable="$mock_dir/$command"
+    
     # Add mock dir to PATH only when the first mock is created
     if [[ ":$PATH:" != *":$mock_dir:"* ]]; then
         export PATH="$mock_dir:$PATH"
