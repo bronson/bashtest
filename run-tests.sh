@@ -31,6 +31,15 @@
 # with variables in the tests themselves. TODO: can we test if we
 # accidentally leak any variables or non-api functions into the testfiles?
 
+# Store the path to the run-tests.sh script for later use
+tsk_runtest_path="$(readlink -f "${BASH_SOURCE[0]}")"
+tsk_testfile_path=""  # Will be set when a testfile sources this script
+
+# Set the testfile path when this script is sourced
+if [ "${BASH_SOURCE[1]}" != "" ]; then
+    tsk_testfile_path="$(readlink -f "${BASH_SOURCE[1]}")"
+fi
+
 tsk_version="0.1"
 
 # save the environment so it can be restored at the end
@@ -258,6 +267,20 @@ start_testing() {
     # TODO: doesn't seem like this should be necessary...?
     touch ".test-stdout" ".test-stderr"
     _start_mocking
+}
+
+# Returns the directory of the currently running testfile
+testfile_dir() {
+    if [ -z "$tsk_testfile_path" ]; then
+        echo "Error: No testfile detected" >&2
+        return 1
+    fi
+    dirname "$tsk_testfile_path"
+}
+
+# Returns the directory of the run-tests.sh script
+runtest_dir() {
+    dirname "$tsk_runtest_path"
 }
 
 stop_testing() {
