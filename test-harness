@@ -53,7 +53,7 @@
 
 # Store the path to the run-tests.sh script for later use
 tsk_framework_path="$(readlink -f "${BASH_SOURCE[0]}")"
-tsk_testfile_path=""  # Will be set when a testfile sources this script
+tsk_testfile_path=""  # the testfile that we're interpreting
 
 # Set the testfile path when this script is sourced
 if [ "${BASH_SOURCE[1]}" != "" ]; then
@@ -277,43 +277,6 @@ stderr_is() {
     fi
 }
 
-start_testing() {
-    tsk_total_count=0
-    tsk_pass_count=0
-    tsk_fail_count=0
-
-    tsk_test_name=""
-
-    # TODO: ensure local directory is writeable first, bounce to /tmp if not
-    # TODO: option to create and mount a ramdisk to run tests
-
-    # Save current directory and PATH
-    tsk_orig_cwd="$(pwd)"
-    tsk_orig_path="$PATH"
-
-    # Find an available test directory
-    local dir_num=1
-    while [ -e "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)" ]; do
-        dir_num=$((dir_num + 1))
-        if [ $dir_num -gt 99 ]; then
-            echo "Too many test directories. `rm -r tsk-test-*`" >&4
-            exit 1
-        fi
-    done
-    tsk_root_dir="$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)"
-    tsk_run_dir="$tsk_root_dir/run"
-    tsk_artifacts_dir="$tsk_root_dir/artifacts"
-
-    mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir"
-    [ $? -ne 0 ] && exit 1   # error should already be printed
-
-    # Change to the run directory
-    cd "$tsk_run_dir"
-
-    # Initialize artifacts files
-    touch "$tsk_artifacts_dir/test-stdout" "$tsk_artifacts_dir/test-stderr"
-}
-
 # Returns the directory of the currently running testfile
 testfile_dir() {
     if [ -z "$tsk_testfile_path" ]; then
@@ -328,29 +291,61 @@ framework_dir() {
     dirname "$tsk_framework_path"
 }
 
-stop_testing() {
-    end_test
 
-    # Restore original stdout and stderr, etc
-    exec 1>&3 2>&4
-    export PATH="$tsk_orig_path"
-    cd "$tsk_orig_cwd"
-
+_print_test_results() {
     local color="$YELLOW"
     if [ $tsk_fail_count -eq 0 ]; then
         color="$GREEN"
         # if all tests pass, there's no need to keep the test directory
         rm -rf "$tsk_root_dir"
     fi
-
-    local count="${tsk_total_count} $(pluralize "$tsk_total_count" "test")"
-    echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${NC}"
 }
 
-start_testing
+_find_test_directory() {
+    local dir_num=1
+    while [ -e "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)" ]; do
+        dir_num=$((dir_num + 1))
+        if [ $dir_num -gt 99 ]; then
+            echo "Too many test directories. `rm -r tsk-test-*`" >&4
+            exit 1
+        fi
+    done
+    echo "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)"
+}
 
+
+tsk_total_count=0
+tsk_pass_count=0
+tsk_fail_count=0
+
+tsk_test_name=""
+
+# TODO: ensure local directory is writeable first, bounce to /tmp if not
+# TODO: option to create and mount a ramdisk to run tests
+
+# Save current directory and PATH
+tsk_orig_cwd="$(pwd)"
+tsk_orig_path="$PATH"
+
+tsk_root_dir="$(_find_test_directory)"
+tsk_run_dir="$tsk_root_dir/run"
+tsk_artifacts_dir="$tsk_root_dir/artifacts"
+mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir"
+[ $? -ne 0 ] && exit 1 # error should already be printed
+
+
+# let's run some tests
+cd "$tsk_run_dir"
 for test in $(compgen -A function | grep '^test:'); do
+    ensure "$test"
     "$test"
+    end_test
 done
 
-stop_testing
+
+# Restore original stdout and stderr, etc
+exec 1>&3 2>&4
+export PATH="$tsk_orig_path"
+cd "$tsk_orig_cwd"
+
+_print_test_results
