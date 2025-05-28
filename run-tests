@@ -292,14 +292,14 @@ start_testing() {
 
     # Find an available test directory
     local dir_num=1
-    while [ -e "tsk-test-$(printf "%02d" $dir_num)" ]; do
+    while [ -e "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)" ]; do
         dir_num=$((dir_num + 1))
         if [ $dir_num -gt 99 ]; then
             echo "Too many test directories. `rm -r tsk-test-*`" >&4
             exit 1
         fi
     done
-    tsk_root_dir="tsk-test-$(printf "%02d" $dir_num)"
+    tsk_root_dir="$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)"
     tsk_run_dir="$tsk_root_dir/run"
     tsk_artifacts_dir="$tsk_root_dir/artifacts"
 
