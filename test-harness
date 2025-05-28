@@ -46,6 +46,7 @@
 #: ```
 
 
+
 # we reserve the tsk_ prefix to prevent incurring any conflicts
 # with variables in the tests themselves. TODO: can we test if we
 # accidentally leak any variables or non-api functions into the testfiles?
@@ -345,3 +346,11 @@ stop_testing() {
     local count="${tsk_total_count} $(pluralize "$tsk_total_count" "test")"
     echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${NC}"
 }
+
+start_testing
+
+for test in $(compgen -A function | grep '^test:'); do
+    "$test"
+done
+
+stop_testing
