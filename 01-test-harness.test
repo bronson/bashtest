@@ -1,0 +1,93 @@
+#!/bin/bash
+
+# These tests verify that the test harness itself works correctly
+# TODO: ensure that the entire API is covered
+
+test:is_eq_works()
+{
+    is_eq "hello" "hello"
+    is_eq "" ""
+}
+
+# Test that is_eq detects inequality - without creating test messages
+# test:is_eq_detects_inequality()
+# {
+#     ensure "is_eq reports failure when values are not equal"
+#
+#     # Custom implementation to test inequality detection without adding test messages
+#     local expected="hello"
+#     local actual="world"
+#
+#     # We'll directly check the implementation details
+#     if [ "$expected" != "$actual" ]; then
+#         # Success - it detected the inequality as expected
+#         # We don't call is_eq to avoid adding error messages
+#         :
+#     else
+#         # If it fails to detect inequality, use is_eq to report the actual error
+#         is_eq "Values should be different" "But they are the same: $expected = $actual"
+#     fi
+# }
+
+test:stderr_is_works()
+{
+    echo "test error message" >&2
+    stderr_is "test error message"
+}
+
+test:stderr_contains_works()
+{
+    echo "this is an error message" >&2
+    stderr_contains "an error"
+}
+
+test:mock_works()
+{
+    mock "testcmd" 'echo "mock command executed"'
+    is_eq "mock command executed" "$(testcmd)"
+}
+
+# TODO: add check_result command: check_result echo hi
+# or check_result expect 1 /bin/false
+#   maybe expect_result 0 /bin/true
+#   maybe run /bin/true, expect_result 0 run /bin/true
+# but run [ -d "$dir" ] looks weird
+# maybe `check result=1 /bin/false`
+
+test:testfile_dir_works()
+{
+    local dir=$(testfile_dir)
+    [ -d "$dir" ]                        # directory exists
+    is_eq 0 $?
+    [ -f "$dir/01-test-harness.test" ]   # and contains this file
+    is_eq 0 $?
+}
+
+test:framework_dir_works()
+{
+    local dir=$(framework_dir)
+    [ -d "$dir" ]                 # directory exists
+    is_eq 0 $?
+    [ -f "$dir/test-harness" ]    # and contains the harness
+    is_eq 0 $?
+}
+
+# Test cleanup of test environment
+# test:cleanup_works()
+# {
+#     ensure "test environment is properly cleaned up after each test"
+#
+#     # Create a temporary file in the test directory
+#     touch "temp_file.txt"
+#
+#     # Verify the file exists
+#     [ -f "temp_file.txt" ]
+#     is_eq 0 $?
+#
+#     # The file should be automatically removed by _check_for_abandoned_files
+#     # in the next test, but we'll remove it manually for now since that
+#     # functionality is currently commented out in the harness
+#     rm "temp_file.txt"
+# }
+
+source "$(dirname "$0")/test-harness"

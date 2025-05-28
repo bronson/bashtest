@@ -177,7 +177,7 @@ _check_for_abandoned_files() {
     fi
 }
 
-end_test() {
+_end_test() {
     _cleanup_mocks
 
     if [ -s "$tsk_artifacts_dir/test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
@@ -223,23 +223,31 @@ end_test() {
     fi
 }
 
-ensure() {
-    end_test  # if a test is already running, end it
-
-    tsk_test_errors=0
-    tsk_test_name="$1"
-    tsk_stderr_checked=false
-    tsk_total_count=$((tsk_total_count + 1))
-
-    # Make sure artifacts directory exists
-    mkdir -p "$tsk_artifacts_dir"
-
-    # Redirect stdout and stderr to files in the artifacts directory
-    exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"
-
-    # no newline, end_test will back up and print the result
-    printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
+_print_test_results() {
+    local color="$YELLOW"
+    if [ $tsk_fail_count -eq 0 ]; then
+        color="$GREEN"
+        # if all tests pass, there's no need to keep the test directory
+        rm -rf "$tsk_root_dir"
+    fi
 }
+
+_find_test_directory() {
+    local dir_num=1
+    while [ -e "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)" ]; do
+        dir_num=$((dir_num + 1))
+        if [ $dir_num -gt 99 ]; then
+            echo "Too many test directories. `rm -r tsk-test-*`" >&4
+            exit 1
+        fi
+    done
+    echo "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)"
+}
+
+
+#
+#    The Testfile API...
+#
 
 is_eq() {
     local expected=$1
@@ -280,37 +288,15 @@ stderr_is() {
 # Returns the directory of the currently running testfile
 testfile_dir() {
     if [ -z "$tsk_testfile_path" ]; then
-        echo "Error: No testfile detected" >&2
-        return 1
+        echo "Error: No testfile detected. THIS IS A BUG. exiting now." >&4
+        exit 1
     fi
     dirname "$tsk_testfile_path"
 }
 
-# Returns the directory of the run-tests.sh script
+# Returns the directory of the test-harness script
 framework_dir() {
     dirname "$tsk_framework_path"
-}
-
-
-_print_test_results() {
-    local color="$YELLOW"
-    if [ $tsk_fail_count -eq 0 ]; then
-        color="$GREEN"
-        # if all tests pass, there's no need to keep the test directory
-        rm -rf "$tsk_root_dir"
-    fi
-}
-
-_find_test_directory() {
-    local dir_num=1
-    while [ -e "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)" ]; do
-        dir_num=$((dir_num + 1))
-        if [ $dir_num -gt 99 ]; then
-            echo "Too many test directories. `rm -r tsk-test-*`" >&4
-            exit 1
-        fi
-    done
-    echo "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)"
 }
 
 
@@ -337,9 +323,20 @@ mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir"
 # let's run some tests
 cd "$tsk_run_dir"
 for test in $(compgen -A function | grep '^test:'); do
-    ensure "$test"
+    tsk_test_errors=0
+    tsk_test_name="$test"
+    tsk_stderr_checked=false
+    tsk_total_count=$((tsk_total_count + 1))
+
+    # in case the previous test redirected its output
+    exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"
+
+    # no newline on this line, end_test will back up and print the result
+    printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
+
     "$test"
-    end_test
+
+    _end_test
 done
 
 
