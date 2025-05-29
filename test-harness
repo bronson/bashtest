@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# TODO: can get rid of tsk_test_errors, since the number of array
+# elements in tsk_test_messages is the number of errors
+
 # Testing Shell Kit
 
 # Guiding Principles
@@ -77,7 +80,7 @@ tsk_artifacts_dir=""  # directory for temporary test artifacts
 # these variables are reset every time a new test is run
 tsk_test_name=""      # the name of the test currently being run
 tsk_test_errors=0     # the number of errors
-tsk_test_messages=""  # string containing a message for each error
+tsk_test_messages=()  # each error message is an entry in this array
 tsk_stderr_checked=false # whether stderr has been explicitly checked
 
 # Colors for output
@@ -201,20 +204,49 @@ _blockquote() {
     echo -n "$1" | sed 's/^/    | /'
 }
 
+# todo? make line number and function name automatic?
 _add_error() {
-    local message="$1"
-
+    tsk_test_messages+=("$1")
     tsk_test_errors=$((tsk_test_errors + 1))
-    if [ -n "$tsk_test_messages" ]; then
-        tsk_test_messages="$tsk_test_messages"$'\n'
-    fi
-    tsk_test_messages="$tsk_test_messages  - $message"
 }
 
+# same as _add_error, but includes a few lines of stderr after the message
 _add_error_with_stderr() {
-    _add_error "$@"
+    local message="$1"
     local snippet="$(head -n 20 "$tsk_artifacts_dir/test-stderr")"
-    tsk_test_messages="$tsk_test_messages"$'\n'"$(_blockquote "$snippet")"
+    message="$message"$'\n'"$(_blockquote "$snippet")"
+    _add_error "$@"
+}
+
+# used to test the API assertion calls: if an assertion failed,
+# but was expected, then the failure is cleared and the test passes.
+_expect_error() {
+    local expected_message="$1"
+
+    # if nothing threw an error, that's an error.
+    if [ ${#tsk_test_messages[@]} -eq 0 ]; then
+        _add_error "line $(_line_number): _expect_error - expected error message: '$expected_message', but no errors were reported"
+        return
+    fi
+
+    # Get the most recent error message
+    local last_idx=$((${#tsk_test_messages[@]} - 1))
+    local last_message="${tsk_test_messages[last_idx]}"
+
+    if [ "$expected_message" = "$last_message" ]; then
+        # the error was expected so it gets cleared
+        unset tsk_test_messages[last_idx]
+        tsk_test_errors=$((tsk_test_errors - 1))
+    else
+        # tsk_test_errors is correct: this test failed
+        # but we need to change the message
+        tsk_test_messages[last_idx]="$(cat <<EOF
+line $(_line_number): _expect_error
+    - expected: $expected_message
+    - received: $last_message
+EOF
+)"
+    fi
 }
 
 # at the end of the test, all mocks are removed
@@ -263,7 +295,7 @@ _run_tests() {
     for test in $(compgen -A function | grep '^test:'); do
         tsk_test_name="$test"
         tsk_test_errors=0
-        tsk_test_messages=""
+        tsk_test_messages=()
         tsk_stderr_checked=false
         tsk_total_count=$((tsk_total_count + 1))
 
@@ -314,8 +346,10 @@ _run_tests() {
 
             printf "\r %02d $res   $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
 
-            if [ -n "$tsk_test_messages" ]; then
-                echo "$tsk_test_messages" >&3
+            if [ ${#tsk_test_messages[@]} -gt 0 ]; then
+                for msg in "${tsk_test_messages[@]}"; do
+                    echo "  - $msg" >&3
+                done
             fi
         fi
     done
