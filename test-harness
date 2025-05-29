@@ -299,6 +299,28 @@ framework_dir() {
     dirname "$tsk_framework_path"
 }
 
+_run_tests() {
+    local test
+
+    cd "$tsk_run_dir"
+    for test in $(compgen -A function | grep '^test:'); do
+        tsk_test_errors=0
+        tsk_test_name="$test"
+        tsk_stderr_checked=false
+        tsk_total_count=$((tsk_total_count + 1))
+
+        # in case the previous test redirected its output
+        exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"
+
+        # no newline on this line, end_test will back up and print the result
+        printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
+
+        "$test"
+
+        _end_test
+    done
+}
+
 
 tsk_total_count=0
 tsk_pass_count=0
@@ -319,26 +341,7 @@ tsk_artifacts_dir="$tsk_root_dir/artifacts"
 mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir"
 [ $? -ne 0 ] && exit 1 # error should already be printed
 
-
-# let's run some tests
-cd "$tsk_run_dir"
-for test in $(compgen -A function | grep '^test:'); do
-    tsk_test_errors=0
-    tsk_test_name="$test"
-    tsk_stderr_checked=false
-    tsk_total_count=$((tsk_total_count + 1))
-
-    # in case the previous test redirected its output
-    exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"
-
-    # no newline on this line, end_test will back up and print the result
-    printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
-
-    "$test"
-
-    _end_test
-done
-
+_run_tests
 
 # Restore original stdout and stderr, etc
 exec 1>&3 2>&4
