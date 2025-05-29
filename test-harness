@@ -89,164 +89,9 @@ NC='\033[0m' # No Color
 # save stdout and stderr so we can restore them after testing
 exec 3>&1 4>&2
 
-pluralize() {
-    local count=$1
-    local singular=$2
-    local plural=${3:-${singular}s}
-
-    if [ "$count" -eq 1 ]; then
-        echo "$singular"
-    else
-        echo "$plural"
-    fi
-}
-
-# returns the line number of the caller of the given frame
-# defaults to the caller of the function calling _line_number
-_line_number() {
-    local frame=${1:-1}
-    local info=$(caller $frame)
-    echo "${info%% *}"
-}
-
-# used to quote large content in the test output, like stderr
-_blockquote() {
-    echo -n "$1" | sed 's/^/    | /'
-}
-
-_add_error() {
-    local message="$1"
-
-    tsk_test_errors=$((tsk_test_errors + 1))
-    if [ -n "$tsk_test_messages" ]; then
-        tsk_test_messages="$tsk_test_messages"$'\n'
-    fi
-    tsk_test_messages="$tsk_test_messages  - $message"
-}
-
-_add_error_with_stderr() {
-    _add_error "$@"
-    local snippet="$(head -n 20 "$tsk_artifacts_dir/test-stderr")"
-    tsk_test_messages="$tsk_test_messages"$'\n'"$(_blockquote "$snippet")"
-}
-
-
-mock() {
-    local command="$1"
-    local behavior="$2"
-    local mock_dir="$tsk_artifacts_dir/test-mocks"
-    local executable="$mock_dir/$command"
-
-    # Create the mock directory and add it to PATH if needed
-    if [ ! -d "$mock_dir" ]; then
-        mkdir -p "$mock_dir"
-    fi
-
-    # Ensure we have an absolute path for the mock directory
-    mock_dir="$(readlink -f "$mock_dir")"
-    executable="$mock_dir/$command"
-
-    # Add mock dir to PATH only when the first mock is created
-    if [[ ":$PATH:" != *":$mock_dir:"* ]]; then
-        export PATH="$mock_dir:$PATH"
-    fi
-
-    cat > "$executable" << EOF
-#!/bin/bash
-$behavior
-EOF
-    chmod +x "$executable"
-}
-
-# at the end of the test, all mocks are removed
-# TODO: one day we might want to set up mocks once and
-# then run them in multiple tests.
-_cleanup_mocks() {
-    rm -rf "$tsk_artifacts_dir/test-mocks"/* "$tsk_artifacts_dir/test-mocks"/.*
-}
-
-
-_check_for_abandoned_files() {
-    # Count all files (including hidden ones)
-    local file_count=$(find . -mindepth 1 -maxdepth 1 | wc -l)
-
-    # If any files found, add an error
-    if [ "$file_count" -gt 0 ]; then
-        local files_list=$(find . -mindepth 1 -maxdepth 1 -printf "%f\n" | sort)
-        _add_error "test didn't clean up $(pluralize $file_count 'file'): $files_list"
-    fi
-}
-
-_end_test() {
-    _cleanup_mocks
-
-    if [ -s "$tsk_artifacts_dir/test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
-        _add_error_with_stderr "test produced stderr:"
-    fi
-
-    # TODO
-    # _check_for_abandoned_files
-
-    local res
-    if [ "$tsk_total_count" -gt 0 ]; then
-        if [ "$tsk_test_errors" -eq 0 ]; then
-            tsk_pass_count=$((tsk_pass_count + 1))
-            res="${GREEN}pass${NC}"
-        else
-            tsk_fail_count=$((tsk_fail_count + 1))
-            res="${RED}FAIL${NC}"
-
-            # Since the test failed, rename the run directory to preserve the state
-            local safe_name=$(echo "$tsk_test_name" | tr ' /\\:*?"<>|' '_')
-            local failed_dir="$tsk_root_dir/failed-$safe_name"
-            mv "$tsk_run_dir" "$failed_dir"
-
-            # Move artifacts to the failed test directory with clear names
-            mkdir -p "$failed_dir"
-            mv "$tsk_artifacts_dir/test-stdout" "$failed_dir/FAILED-stdout.txt" 2>&4
-            mv "$tsk_artifacts_dir/test-stderr" "$failed_dir/FAILED-stderr.txt" 2>&4
-            if [ -d "$tsk_artifacts_dir/test-mocks" ]; then
-                mv "$tsk_artifacts_dir/test-mocks" "$failed_dir/FAILED-mocks" 2>&4
-            fi
-        fi
-
-        local errmsg=''
-        if [ $tsk_test_errors -gt 0 ]; then
-            errmsg="($tsk_test_errors $(pluralize "$tsk_test_errors" "error"))"
-        fi
-
-        printf "\r %02d $res   $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
-
-        if [ -n "$tsk_test_messages" ]; then
-            echo "$tsk_test_messages" >&3
-        fi
-    fi
-}
-
-_print_test_results() {
-    local color="$YELLOW"
-    if [ $tsk_fail_count -eq 0 ]; then
-        color="$GREEN"
-        # if all tests pass, there's no need to keep the test directory
-        rm -rf "$tsk_root_dir"
-    fi
-}
-
-_find_test_directory() {
-    local dir_num=1
-    while [ -e "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)" ]; do
-        dir_num=$((dir_num + 1))
-        if [ $dir_num -gt 99 ]; then
-            echo "Too many test directories. `rm -r tsk-test-*`" >&4
-            exit 1
-        fi
-    done
-    echo "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)"
-}
-
 
 #
-#    The Testfile API...
+#    The API available to tests...
 #
 
 is_eq() {
@@ -285,6 +130,33 @@ stderr_is() {
     fi
 }
 
+mock() {
+    local command="$1"
+    local behavior="$2"
+    local mock_dir="$tsk_artifacts_dir/test-mocks"
+    local executable="$mock_dir/$command"
+
+    # Create the mock directory and add it to PATH if needed
+    if [ ! -d "$mock_dir" ]; then
+        mkdir -p "$mock_dir"
+    fi
+
+    # Ensure we have an absolute path for the mock directory
+    mock_dir="$(readlink -f "$mock_dir")"
+    executable="$mock_dir/$command"
+
+    # Add mock dir to PATH only when the first mock is created
+    if [[ ":$PATH:" != *":$mock_dir:"* ]]; then
+        export PATH="$mock_dir:$PATH"
+    fi
+
+    cat > "$executable" << EOF
+#!/bin/bash
+$behavior
+EOF
+    chmod +x "$executable"
+}
+
 # Returns the directory of the currently running testfile
 testfile_dir() {
     if [ -z "$tsk_testfile_path" ]; then
@@ -299,13 +171,99 @@ framework_dir() {
     dirname "$tsk_framework_path"
 }
 
+pluralize() {
+    local count=$1
+    local singular=$2
+    local plural=${3:-${singular}s}
+
+    if [ "$count" -eq 1 ]; then
+        echo "$singular"
+    else
+        echo "$plural"
+    fi
+}
+
+
+#
+#    Testing internals
+#
+
+# returns the line number of the caller of the given frame
+# defaults to the caller of the function calling _line_number
+_line_number() {
+    local frame=${1:-1}
+    local info=$(caller $frame)
+    echo "${info%% *}"
+}
+
+# used to quote large content in the test output, like stderr
+_blockquote() {
+    echo -n "$1" | sed 's/^/    | /'
+}
+
+_add_error() {
+    local message="$1"
+
+    tsk_test_errors=$((tsk_test_errors + 1))
+    if [ -n "$tsk_test_messages" ]; then
+        tsk_test_messages="$tsk_test_messages"$'\n'
+    fi
+    tsk_test_messages="$tsk_test_messages  - $message"
+}
+
+_add_error_with_stderr() {
+    _add_error "$@"
+    local snippet="$(head -n 20 "$tsk_artifacts_dir/test-stderr")"
+    tsk_test_messages="$tsk_test_messages"$'\n'"$(_blockquote "$snippet")"
+}
+
+# at the end of the test, all mocks are removed
+# TODO: one day we might want to set up mocks once and
+# then run them in multiple tests.
+_cleanup_mocks() {
+    rm -rf "$tsk_artifacts_dir/test-mocks"/* "$tsk_artifacts_dir/test-mocks"/.*
+}
+
+_check_for_abandoned_files() {
+    # Count all files (including hidden ones)
+    local file_count=$(find . -mindepth 1 -maxdepth 1 | wc -l)
+
+    # If any files found, add an error
+    if [ "$file_count" -gt 0 ]; then
+        local files_list=$(find . -mindepth 1 -maxdepth 1 -printf "%f\n" | sort)
+        _add_error "test didn't clean up $(pluralize $file_count 'file'): $files_list"
+    fi
+}
+
+_print_test_results() {
+    local color="$YELLOW"
+    if [ $tsk_fail_count -eq 0 ]; then
+        color="$GREEN"
+        # if all tests pass, there's no need to keep the test directory
+        rm -rf "$tsk_root_dir"
+    fi
+}
+
+_find_test_directory() {
+    local dir_num=1
+    while [ -e "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)" ]; do
+        dir_num=$((dir_num + 1))
+        if [ $dir_num -gt 99 ]; then
+            echo "Too many test directories. `rm -r tsk-test-*`" >&4
+            exit 1
+        fi
+    done
+    echo "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)"
+}
+
 _run_tests() {
     local test
 
     cd "$tsk_run_dir"
     for test in $(compgen -A function | grep '^test:'); do
-        tsk_test_errors=0
         tsk_test_name="$test"
+        tsk_test_errors=0
+        tsk_test_messages=""
         tsk_stderr_checked=false
         tsk_total_count=$((tsk_total_count + 1))
 
@@ -317,7 +275,49 @@ _run_tests() {
 
         "$test"
 
-        _end_test
+        _cleanup_mocks
+
+        if [ -s "$tsk_artifacts_dir/test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
+            _add_error_with_stderr "test produced stderr:"
+        fi
+
+        # TODO
+        # _check_for_abandoned_files
+
+        local res
+        if [ "$tsk_total_count" -gt 0 ]; then
+            if [ "$tsk_test_errors" -eq 0 ]; then
+                tsk_pass_count=$((tsk_pass_count + 1))
+                res="${GREEN}pass${NC}"
+            else
+                tsk_fail_count=$((tsk_fail_count + 1))
+                res="${RED}FAIL${NC}"
+
+                # Since the test failed, rename the run directory to preserve the state
+                local safe_name=$(echo "$tsk_test_name" | tr ' /\\:*?"<>|' '_')
+                local failed_dir="$tsk_root_dir/failed-$safe_name"
+                mv "$tsk_run_dir" "$failed_dir"
+
+                # Move artifacts to the failed test directory with clear names
+                mkdir -p "$failed_dir"
+                mv "$tsk_artifacts_dir/test-stdout" "$failed_dir/FAILED-stdout.txt" 2>&4
+                mv "$tsk_artifacts_dir/test-stderr" "$failed_dir/FAILED-stderr.txt" 2>&4
+                if [ -d "$tsk_artifacts_dir/test-mocks" ]; then
+                    mv "$tsk_artifacts_dir/test-mocks" "$failed_dir/FAILED-mocks" 2>&4
+                fi
+            fi
+
+            local errmsg=''
+            if [ $tsk_test_errors -gt 0 ]; then
+                errmsg="($tsk_test_errors $(pluralize "$tsk_test_errors" "error"))"
+            fi
+
+            printf "\r %02d $res   $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
+
+            if [ -n "$tsk_test_messages" ]; then
+                echo "$tsk_test_messages" >&3
+            fi
+        fi
     done
 }
 
