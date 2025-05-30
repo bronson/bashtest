@@ -68,6 +68,8 @@ exec 3>&1 4>&2        # copy stdout and stderr to FDs 3 and 4
 tsk_total_count=0     # current number of tests run
 tsk_pass_count=0      # current number of tests passed
 tsk_fail_count=0      # current number of tests failed
+tsk_skip_count=0      # current number of tests skipped
+tsk_total_assertions=0 # total number of assertions made
 tsk_root_dir=""       # main test directory
 tsk_run_dir=""        # directory where tests run
 tsk_artifacts_dir=""  # directory for temporary test artifacts
@@ -75,6 +77,7 @@ tsk_artifacts_dir=""  # directory for temporary test artifacts
 # these variables are reset every time a new test is run
 tsk_test_name=""      # the name of the test currently being run
 declare -a tsk_test_messages=() # array containing a message for each error
+tsk_test_assertions=0 # current number of assertions made in the test
 tsk_stderr_checked=false # whether stderr has been explicitly checked
 
 # Colors for output
@@ -95,6 +98,8 @@ is_eq() {
     local expected=$1
     local actual=$2
 
+    tsk_test_assertions=$((tsk_test_assertions + 1))
+
     if [ "$expected" != "$actual" ]; then
         _add_error "line $(_line_number): is_eq expected '$expected', got '$actual'"
     fi
@@ -103,7 +108,9 @@ is_eq() {
 stderr_contains() {
     local expected_text="$1"
 
+    tsk_test_assertions=$((tsk_test_assertions + 1))
     tsk_stderr_checked=true
+
     if ! grep -q "$expected_text" "$tsk_artifacts_dir/test-stderr"; then
         _add_error_with_stderr "stderr_contains line $(_line_number): stderr doesn't contain: '$expected_text'"
     fi
@@ -117,10 +124,12 @@ stderr_is() {
     local expected_text="$1"
     local actual_text="$(cat "$tsk_artifacts_dir/test-stderr")"
 
+    tsk_test_assertions=$((tsk_test_assertions + 1))
+    tsk_stderr_checked=true
+
     echo -n "$expected_text" > /tmp/et
     echo -n "$actual_text" > /tmp/at
 
-    tsk_stderr_checked=true
     if [ "$expected_text" != "$actual_text" ]; then
         local msg="stderr should have been: "$'\n'"$(_blockquote "$expected_text")"$'\n'"    but was:"
         _add_error_with_stderr "stderr_is line $(_line_number): $msg"
@@ -216,6 +225,8 @@ _add_error_with_stderr() {
 _expect_error() {
     local expected_message="$1"
 
+    tsk_test_assertions=$((tsk_test_assertions + 1))
+
     # if nothing threw an error, that's an error.
     if [ ${#tsk_test_messages[@]} -eq 0 ]; then
         _add_error "line $(_line_number): _expect_error - expected error message: '$expected_message', but no errors were reported"
@@ -260,15 +271,24 @@ _check_for_abandoned_files() {
 }
 
 _print_test_results() {
-    local color="$YELLOW"
+    local color="$GREEN"
     if [ $tsk_fail_count -eq 0 ]; then
-        color="$GREEN"
         # if all tests pass, there's no need to keep the test directory
         rm -rf "$tsk_root_dir"
     fi
 
+    local skip_msg=""
+    if [ $tsk_skip_count -gt 0 ]; then
+        color="$YELLOW"
+        skip_msg=", ${tsk_skip_count} skipped"
+    fi
+
+    if [ $tsk_fail_count -gt 0 ]; then
+        color="$RED"
+    fi
+
     local count="${tsk_total_count} $(pluralize "$tsk_total_count" "test")"
-    echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${NC}"
+    echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${tsk_total_assertions} assertions${NC}"
 }
 
 _find_test_directory() {
@@ -290,6 +310,7 @@ _run_tests() {
     for test in $(compgen -A function | grep '^test:'); do
         tsk_test_name="$test"
         tsk_test_messages=()
+        tsk_test_assertions=0
         tsk_stderr_checked=false
         tsk_total_count=$((tsk_total_count + 1))
 
@@ -300,6 +321,9 @@ _run_tests() {
         printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
 
         "$test"
+
+        # Add this test's assertions to the total
+        tsk_total_assertions=$((tsk_total_assertions + tsk_test_assertions))
 
         _cleanup_mocks
 
@@ -312,10 +336,17 @@ _run_tests() {
 
         local res
         if [ "$tsk_total_count" -gt 0 ]; then
-            if [ ${#tsk_test_messages[@]} -eq 0 ]; then
+            # Check if the test made any assertions
+            if [ $tsk_test_assertions -eq 0 ]; then
+                # Test made no assertions, mark as skipped
+                tsk_skip_count=$((tsk_skip_count + 1))
+                res="${YELLOW}skip${NC}"
+            elif [ ${#tsk_test_messages[@]} -eq 0 ]; then
+                # Test passed (made assertions with no errors)
                 tsk_pass_count=$((tsk_pass_count + 1))
                 res="${GREEN}pass${NC}"
             else
+                # Test failed (had errors)
                 tsk_fail_count=$((tsk_fail_count + 1))
                 res="${RED}FAIL${NC}"
 
@@ -337,6 +368,8 @@ _run_tests() {
             local num_fails="${#tsk_test_messages[@]}"
             if [ "$num_fails" -gt 0 ]; then
                 errmsg="($num_fails $(pluralize "$num_fails" "error"))"
+            elif [ $tsk_test_assertions -gt 0 ]; then
+                errmsg="($tsk_test_assertions $(pluralize "$tsk_test_assertions" "assertion"))"
             fi
 
             printf "\r %02d $res   $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
@@ -354,8 +387,11 @@ _run_tests() {
 tsk_total_count=0
 tsk_pass_count=0
 tsk_fail_count=0
+tsk_skip_count=0
+tsk_total_assertions=0
 
 tsk_test_name=""
+tsk_test_assertions=0
 
 # TODO: ensure local directory is writeable first, bounce to /tmp if not
 # TODO: option to create and mount a ramdisk to run tests

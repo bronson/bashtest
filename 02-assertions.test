@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Tests for assertions tracking and skipped tests in the test harness
+
+# This test makes no assertions and should be skipped
+test:no_assertions() {
+    # Do something that doesn't assert anything
+    echo "This test has no assertions"
+}
+
+# This test makes a single assertion and should pass
+test:one_assertion() {
+    is_eq "hello" "hello"
+}
+
+# This test makes multiple assertions and should pass
+test:multiple_assertions() {
+    is_eq "hello" "hello"
+    is_eq 42 42
+    is_eq "true" "true"
+
+    # Total: 3 assertions
+}
+
+# This test makes assertions and has an expected error
+test:expected_error() {
+    is_eq "hello" "hello"  # This passes
+
+    is_eq "apple" "orange" # This will fail
+    _expect_error "line 29: is_eq expected 'apple', got 'orange'"
+
+    # Total: 3 assertions (is_eq, is_eq, _expect_error)
+}
+
+# This test should show a stderr assertion
+test:stderr_assertion() {
+    echo "testing stderr assertions" >&2
+    stderr_contains "testing"
+
+    # Total: 1 assertion
+}
+
+# This test checks if stderr_is counts as an assertion
+test:stderr_is_assertion() {
+    echo "exact stderr message" >&2
+    stderr_is "exact stderr message"
+
+    # Total: 1 assertion
+}
+
+# This test makes an assertion but fails
+test:failing_test() {
+    return
+    is_eq "pass" "pass"   # This passes
+    is_eq "fail" "not-fail" # This fails
+
+    # This test should show 2 assertions and 1 error
+}
+
+source "$(dirname "$0")/test-harness"
