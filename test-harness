@@ -136,6 +136,17 @@ stderr_is() {
     fi
 }
 
+abort() {
+    # TODO: should run tests in a subshell that keeps testing
+    # until abort is called. Abort exits the subshell.
+    # Potentially skip could use this technique too but that's
+    # probably not worth it.
+    local errmsg="line $(_line_number): $1"
+    printf "\r %02d ${RED}ABORT${NC}  $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
+    printf "${RED}TEST ABORTED${NC}\n" >&3
+    exit 127
+}
+
 mock() {
     local command="$1"
     local behavior="$2"
@@ -346,7 +357,7 @@ _run_tests() {
                 tsk_pass_count=$((tsk_pass_count + 1))
                 res="${GREEN}pass${NC}"
             else
-                # Test failed (had errors)
+                # test had one or more failing assertions
                 tsk_fail_count=$((tsk_fail_count + 1))
                 res="${RED}FAIL${NC}"
 
