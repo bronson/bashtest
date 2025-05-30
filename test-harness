@@ -266,6 +266,9 @@ _print_test_results() {
         # if all tests pass, there's no need to keep the test directory
         rm -rf "$tsk_root_dir"
     fi
+
+    local count="${tsk_total_count} $(pluralize "$tsk_total_count" "test")"
+    echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${NC}"
 }
 
 _find_test_directory() {
