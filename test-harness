@@ -60,8 +60,6 @@ if [ "${BASH_SOURCE[1]}" != "" ]; then
     tsk_testfile_path="$(readlink -f "${BASH_SOURCE[1]}")"
 fi
 
-tsk_version="0.1"
-
 # save the environment so it can be restored at the end
 tsk_orig_cwd=""       # original directory before testing started
 tsk_orig_path=""      # original PATH before testing started
@@ -117,7 +115,7 @@ stderr_contains() {
 # TODO: this is not great.
 stderr_is() {
     local expected_text="$1"
-    local actual_text=$(cat "$tsk_artifacts_dir/test-stderr")
+    local actual_text="$(cat "$tsk_artifacts_dir/test-stderr")"
 
     echo -n "$expected_text" > /tmp/et
     echo -n "$actual_text" > /tmp/at
@@ -191,7 +189,7 @@ pluralize() {
 # defaults to the caller of the function calling _line_number
 _line_number() {
     local frame=${1:-1}
-    local info=$(caller $frame)
+    local info=$(caller "$frame")
     echo "${info%% *}"
 }
 
@@ -230,7 +228,7 @@ _expect_error() {
 
     if [ "$expected_message" = "$last_message" ]; then
         # the error was expected so it gets cleared
-        unset tsk_test_messages[last_idx]
+        unset "tsk_test_messages[last_idx]"
     else
         # tsk_test_errors is correct: this test failed
         # but we need to change the message
@@ -257,7 +255,7 @@ _check_for_abandoned_files() {
     # If any files found, add an error
     if [ "$file_count" -gt 0 ]; then
         local files_list=$(find . -mindepth 1 -maxdepth 1 -printf "%f\n" | sort)
-        _add_error "test didn't clean up $(pluralize $file_count 'file'): $files_list"
+        _add_error "test didn't clean up $(pluralize "$file_count" 'file'): $files_list"
     fi
 }
 
@@ -275,7 +273,7 @@ _find_test_directory() {
     while [ -e "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)" ]; do
         dir_num=$((dir_num + 1))
         if [ $dir_num -gt 99 ]; then
-            echo "Too many test directories. `rm -r tsk-test-*`" >&4
+            echo "Too many test directories. Run: rm -r tsk-test-*" >&4
             exit 1
         fi
     done
@@ -285,7 +283,7 @@ _find_test_directory() {
 _run_tests() {
     local test
 
-    cd "$tsk_run_dir"
+    cd "$tsk_run_dir" || exit 1
     for test in $(compgen -A function | grep '^test:'); do
         tsk_test_name="$test"
         tsk_test_messages=()
@@ -366,8 +364,7 @@ tsk_orig_path="$PATH"
 tsk_root_dir="$(_find_test_directory)"
 tsk_run_dir="$tsk_root_dir/run"
 tsk_artifacts_dir="$tsk_root_dir/artifacts"
-mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir"
-[ $? -ne 0 ] && exit 1 # error should already be printed
+mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir" 2>&4 || exit 1
 
 _run_tests
 
