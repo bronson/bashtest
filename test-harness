@@ -120,21 +120,35 @@ stderr_contains() {
 # If you need to be pedantically correct about the presence of the final
 # newline, you'll have to check for it outside of this function.
 # TODO: this is not great.
-stderr_is() {
+file_is() {
     local expected_text="$1"
-    local actual_text="$(cat "$tsk_artifacts_dir/test-stderr")"
+    local file_path="$2"
+    local call_name="${3:-file_is}"
+    local lineno="${4:-$(_line_number)}"
 
     tsk_test_assertions=$((tsk_test_assertions + 1))
-    tsk_stderr_checked=true
 
-    echo -n "$expected_text" > /tmp/et
-    echo -n "$actual_text" > /tmp/at
+    if [ -z "$file_path" ] || [ ! -f "$file_path" ]; then
+        _add_error "line $lineno: $call_name couldn't open '$file_path'"
+        return
+    fi
 
+    local actual_text="$(cat "$file_path")"
     if [ "$expected_text" != "$actual_text" ]; then
-        local msg="stderr should have been: "$'\n'"$(_blockquote "$expected_text")"$'\n'"    but was:"
-        _add_error_with_stderr "stderr_is line $(_line_number): $msg"
+        local msg="expected: "$'\n'"$(_blockquote "$expected_text")"$'\n'"    but was:"$'\n'"$(_blockquote "$actual_text")"
+        _add_error "line $lineno: $call_name $msg"
     fi
 }
+
+stdout_is() {
+    file_is "$1" "$tsk_artifacts_dir/test-stdout" stdout_is "$(_line_number)"
+}
+
+stderr_is() {
+    file_is "$1" "$tsk_artifacts_dir/test-stderr" stderr_is "$(_line_number)"
+    tsk_stderr_checked=true
+}
+
 
 abort() {
     # TODO: should run tests in a subshell that keeps testing
@@ -231,6 +245,11 @@ _add_error_with_stderr() {
     _add_error "$message"
 }
 
+_normalize_line_numbers() {
+    # replace "line 12" with "line nnn"
+    echo "$1" | sed -E 's/line [0-9]+:/line nnn:/g'
+}
+
 # used to test the API assertion calls: if an assertion failed,
 # but was expected, then the failure is cleared and the test passes.
 _expect_error() {
@@ -248,16 +267,19 @@ _expect_error() {
     local last_idx=$((${#tsk_test_messages[@]} - 1))
     local last_message="${tsk_test_messages[last_idx]}"
 
-    if [ "$expected_message" = "$last_message" ]; then
+    # Normalize line numbers in both messages
+    local normalized_expected="$(_normalize_line_numbers "$expected_message")"
+    local normalized_last="$(_normalize_line_numbers "$last_message")"
+
+    if [ "$normalized_expected" = "$normalized_last" ] || [ "$expected_message" = "$last_message" ]; then
         # the error was expected so it gets cleared
         unset "tsk_test_messages[last_idx]"
     else
-        # tsk_test_errors is correct: this test failed
-        # but we need to change the message
+        # Show both the original and normalized versions to help with debugging
         tsk_test_messages[last_idx]="$(cat <<EOF
 line $(_line_number): _expect_error
-    - expected: $expected_message
-    - received: $last_message
+    - expected: $normalized_expected
+    - received: $normalized_last
 EOF
 )"
     fi

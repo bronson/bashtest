@@ -1,60 +1,107 @@
 #!/bin/bash
 
-# Tests for assertions tracking and skipped tests in the test harness
+# This file tries to exercise the assertions
 
-# This test makes no assertions and should be skipped
-test:no_assertions() {
-    # Do something that doesn't assert anything
-    echo "This test has no assertions"
-}
+# TODO: test skipping
+# test:no_assertions() {
+#     echo "This test has no assertions"
+# }
 
-# This test makes a single assertion and should pass
-test:one_assertion() {
-    is_eq "hello" "hello"
-}
-
-# This test makes multiple assertions and should pass
-test:multiple_assertions() {
-    is_eq "hello" "hello"
-    is_eq 42 42
-    is_eq "true" "true"
-
-    # Total: 3 assertions
-}
-
-# This test makes assertions and has an expected error
+# make sure expected_error works before using to test the assertions
 test:expected_error() {
-    is_eq "hello" "hello"  # This passes
+    is_eq "apple" "orange"
+    _expect_error "line nnn: is_eq expected 'apple', got 'orange'"
+}
 
-    is_eq "apple" "orange" # This will fail
-    _expect_error "line 29: is_eq expected 'apple', got 'orange'"
+test:is_eq()
+{
+    is_eq "hello" "hello"
+    is_eq "" ""
+    is_eq "   " "   "
 
-    # Total: 3 assertions (is_eq, is_eq, _expect_error)
+    is_eq 0 ""     # TODO: need to not depend on line #s here!
+    _expect_error "line 12: is_eq expected '0', got ''"
+    is_eq "10.0" 10
+    _expect_error "line 14: is_eq expected '10.0', got '10'"
+    # TODO: I wouldn't expect variable interpolation in this function
+    # is_eq '$var_no_exist' ''      # ensure no interpolation
+    # _expect_error "line 16: is_eq expected '$var_no_exist', got ''"
+    # is_eq '' '$var_no_exist'      # in either argument
+    # _expect_error "line 18: is_eq expected '', got '$var_no_exist'"
+    is_eq " " "  "                # test whitespace
+    _expect_error "line 21: is_eq expected ' ', got '  '"
+}
+
+test:file_is() {
+    echo "123"$'\n'"456" > scratchfile
+    file_is "123"$'\n'"456" scratchfile
+    file_is "123"$'\n'"456" scratchfile  # ensure it can run again
+}
+
+test:file_is_not() {
+    echo "aaa" > scratchfile
+    file_is "bbb" scratchfile
+    _expect_error "line nnn: file_is expected 'bbb', got 'aaa'"
+
+#     _expect_error "$(cat <<EOF
+# line nnn: file_is expected:
+#     | bbb
+#     but was:
+#     | aaa
+# EOF)"
+
+    file_is "missing-file"
+    _expect_error "line nnn: file_is couldn't open 'missing-file'"
+
+    file_is # no arguments
+    _expect_error "line nnn: file_is couldn't open ''"
+}
+
+test:stdout_is() {
+    echo "     " > scratchfile
+    stdout_is "     "
+}
+
+test:stdout_is_not() {
+    > scratchfile
+    stdout_is " "
+    _expect_error "line nnn: stdout_is expected ' ', got '    '"
+}
+
+test:stderr_is() {
+    echo '  $zzz $zzz  ' > scratchfile
+    stderr_is '  $zzz $zzz  '
+}
+
+test:stderr_is_not() {
+    echo $'\n\n' > scratchfile
+    stderr_is true
+    # expecting a one line file because bash tends to ignore the trailing newline
+    _expect_error "line nnn: stderr_is expected 'true', got:"$'\n'"    | "
 }
 
 # This test should show a stderr assertion
-test:stderr_assertion() {
+test:stderr_contains() {
     echo "testing stderr assertions" >&2
     stderr_contains "testing"
-
-    # Total: 1 assertion
 }
 
-# This test checks if stderr_is counts as an assertion
-test:stderr_is_assertion() {
-    echo "exact stderr message" >&2
-    stderr_is "exact stderr message"
-
-    # Total: 1 assertion
-}
-
+# TODO: test failing tests elsewhere
 # This test makes an assertion but fails
-test:failing_test() {
-    return
-    is_eq "pass" "pass"   # This passes
-    is_eq "fail" "not-fail" # This fails
+# test:failing_test() {
+#     return
+#     is_eq "pass" "pass"   # This passes
+#     is_eq "fail" "not-fail" # This fails
 
-    # This test should show 2 assertions and 1 error
+#     # This test should show 2 assertions and 1 error
+# }
+
+# TODO: mock isn't an assertion
+# TODO: should it be an error if you mock something but don't use it?
+test:mock_works()
+{
+    mock "testcmd" 'echo "mock command executed"'
+    is_eq "mock command executed" "$(testcmd)"
 }
 
 source "$(dirname "$0")/test-harness"
