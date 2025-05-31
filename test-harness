@@ -45,7 +45,10 @@
 #: source "$(dirname "$0")/../run-tests.sh"
 #: ```
 
-
+if [ -n "$tsk_framework_path" ]; then
+    # test harness is already loaded, don't load again.
+    return   # calling exit would terminate the test currently in progress.
+fi
 
 # we reserve the tsk_ prefix to prevent incurring any conflicts
 # with variables in the tests themselves. TODO: can we test if we
@@ -53,11 +56,16 @@
 
 # Store the path to the run-tests.sh script for later use
 tsk_framework_path="$(readlink -f "${BASH_SOURCE[0]}")"
-tsk_testfile_path=""  # the testfile that we're interpreting
+tsk_testfile_path=""  # the testfile that we're interpreting or blank if no file
 
-# Set the testfile path when this script is sourced
 if [ "${BASH_SOURCE[1]}" != "" ]; then
+    # if the test harness is being sourced, it's from a test file
     tsk_testfile_path="$(readlink -f "${BASH_SOURCE[1]}")"
+else
+    # otherwise, read the tests from stdin without a testfile
+    # (this is used when testing the test harness itself)
+    tsk_testfile_path="STDIN"
+    source <(cat)
 fi
 
 # save the environment so it can be restored at the end
@@ -145,6 +153,13 @@ file_is() {
     local call_name="${3:-file_is}"
     local lineno="${4:-$(_line_number)}"
 
+    # if the expected text isn't in the argument, it's on stdin
+    if [ -z "$expected_text" ]; then
+        if read -t 0; then    # don't hang if data isn't there
+            expected_text="$(cat)"
+        fi
+    fi
+
     tsk_test_assertions=$((tsk_test_assertions + 1))
 
     if [ -z "$file_path" ] || [ ! -f "$file_path" ]; then
@@ -169,10 +184,8 @@ stderr_is() {
 
 
 abort() {
-    # TODO: should run tests in a subshell that keeps testing
-    # until abort is called. Abort exits the subshell.
-    # Potentially skip could use this technique too but that's
-    # probably not worth it.
+    # TODO: could run tests in a subshell that keeps testing until abort is called.
+    # Abort exits the subshell and then the tests end normally.
     local errmsg="line $(_line_number): $1"
     printf "${CR} %02d ${RED}ABORT${NC}  $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
     printf "${RED}TEST ABORTED${NC}\n" >&3
@@ -358,7 +371,8 @@ _print_test_results() {
     fi
 
     local count="${tsk_total_count} $(pluralize "$tsk_total_count" "test")"
-    echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${tsk_total_assertions} assertions${NC}"
+    local assertions="${tsk_total_assertions} $(pluralize "$tsk_total_assertions" "assertion")."
+    echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${assertions}${NC}"
 }
 
 _find_test_directory() {
@@ -373,11 +387,20 @@ _find_test_directory() {
     echo "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)"
 }
 
+# Generates a list of test functions to run.
+_find_tests() {
+    # `declare -F | cut -d" " -f3 | grep '^test:'`
+    # `typeset -F` seems to be a synonym for declare F
+    compgen -A function test:
+    # TODO: should run the tests in the order they're declared
+    # in the file, not in alphabetical order.
+}
+
 _run_tests() {
     local test
 
     cd "$tsk_run_dir" || exit 1
-    for test in $(compgen -A function | grep '^test:'); do
+    for test in $(_find_tests); do
         tsk_test_name="$test"
         tsk_test_messages=()
         tsk_test_assertions=0
@@ -440,12 +463,10 @@ _run_tests() {
             local errmsg=''
             local num_fails="${#tsk_test_messages[@]}"
             if [ "$num_fails" -gt 0 ]; then
-                errmsg="($num_fails $(pluralize "$num_fails" "error"))"
-            elif [ $tsk_test_assertions -gt 0 ]; then
-                errmsg="($tsk_test_assertions $(pluralize "$tsk_test_assertions" "assertion"))"
+                errmsg=" ($num_fails $(pluralize "$num_fails" "error"))"
             fi
 
-            printf "$CR %02d $res   $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
+            printf "$CR %02d $res   $tsk_test_name$errmsg\n" "$tsk_total_count" >&3
 
             if [ ${#tsk_test_messages[@]} -gt 0 ]; then
                 for msg in "${tsk_test_messages[@]}"; do
