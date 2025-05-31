@@ -201,6 +201,11 @@ framework_dir() {
     dirname "$tsk_framework_path"
 }
 
+# call this to make differences be displayed using `diff` rather than side-by-side
+want_diff() {
+    tsk_test_want_format="diff"
+}
+
 pluralize() {
     local count=$1
     local singular=$2
@@ -231,19 +236,27 @@ _blockquote() {
     echo -n "$1" | sed 's/^/    | /'
 }
 
-# TODO: one day, actually use diff
 _format_diff() {
     local expected="$1"
     local actual="$2"
 
-    # Check if both are single line and short
+    # For short single-line content, always use simple quoted format
     if [[ "$expected" != *$'\n'* && "$actual" != *$'\n'* &&
           ${#expected} -lt 30 && ${#actual} -lt 30 ]]; then
-        # strings are short, just quote them
         echo "expected '$expected', got '$actual'"
-    else
-        echo "expected:"$'\n'"$(_blockquote "$expected")"$'\n'"    but got:"$'\n'"$(_blockquote "$actual")"
+        return
     fi
+
+    # if the user asked for a diff, provide it
+    if [ "$tsk_test_want_format" = "diff" ] && command -v diff &>/dev/null; then
+        local diff_output="$(diff -u <(echo "$expected") <(echo "$actual") | tail -n +3 | cat -vet)"
+        if [[ -n "$diff_output" ]]; then
+            echo "diff:"$'\n'"$(_blockquote "$diff_output")"
+            return
+        fi
+    fi
+
+    echo "expected:"$'\n'"$(_blockquote "$expected")"$'\n'"    but got:"$'\n'"$(_blockquote "$actual")"
 }
 
 # todo? make line number and function name automatic?
@@ -351,6 +364,7 @@ _run_tests() {
         tsk_test_assertions=0
         tsk_stderr_checked=false
         tsk_total_count=$((tsk_total_count + 1))
+        tsk_test_want_format=""
 
         # in case the previous test redirected its output
         exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"

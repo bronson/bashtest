@@ -68,12 +68,15 @@ test:stderr_is() {
 
 test:stderr_is_not() {
     echo $'\n.\n' >&2
+
+    # the test output has a trailing space... and editors often delete trailing spaces.
+    # so, we'll represent the trailing space with '@'' and have sed fix it up after.
     stderr_is "true"
-    _expect_error "$(cat <<EOF
+    _expect_error "$(cat <<EOF | sed 's/@/ /'
 line nnn: stderr_is expected:
     | true
     but got:
-    |
+    |@
     | .
 EOF
     )"
