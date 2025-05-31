@@ -135,8 +135,7 @@ file_is() {
 
     local actual_text="$(cat "$file_path")"
     if [ "$expected_text" != "$actual_text" ]; then
-        local msg="expected: "$'\n'"$(_blockquote "$expected_text")"$'\n'"    but was:"$'\n'"$(_blockquote "$actual_text")"
-        _add_error "line $lineno: $call_name $msg"
+        _add_error "line $lineno: $call_name $(_format_diff "$expected_text" "$actual_text")"
     fi
 }
 
@@ -232,6 +231,21 @@ _blockquote() {
     echo -n "$1" | sed 's/^/    | /'
 }
 
+# TODO: one day, actually use diff
+_format_diff() {
+    local expected="$1"
+    local actual="$2"
+
+    # Check if both are single line and short
+    if [[ "$expected" != *$'\n'* && "$actual" != *$'\n'* &&
+          ${#expected} -lt 30 && ${#actual} -lt 30 ]]; then
+        # strings are short, just quote them
+        echo "expected '$expected', got '$actual'"
+    else
+        echo "expected:"$'\n'"$(_blockquote "$expected")"$'\n'"    but got:"$'\n'"$(_blockquote "$actual")"
+    fi
+}
+
 # todo? make line number and function name automatic?
 _add_error() {
     tsk_test_messages+=("$1")
@@ -253,7 +267,7 @@ _normalize_line_numbers() {
 # used to test the API assertion calls: if an assertion failed,
 # but was expected, then the failure is cleared and the test passes.
 _expect_error() {
-    local expected_message="$1"
+    local expected_message="$(_normalize_line_numbers "$1")"
 
     tsk_test_assertions=$((tsk_test_assertions + 1))
 
@@ -265,23 +279,14 @@ _expect_error() {
 
     # Get the most recent error message
     local last_idx=$((${#tsk_test_messages[@]} - 1))
-    local last_message="${tsk_test_messages[last_idx]}"
+    local last_message="$(_normalize_line_numbers "${tsk_test_messages[last_idx]}")"
 
-    # Normalize line numbers in both messages
-    local normalized_expected="$(_normalize_line_numbers "$expected_message")"
-    local normalized_last="$(_normalize_line_numbers "$last_message")"
-
-    if [ "$normalized_expected" = "$normalized_last" ] || [ "$expected_message" = "$last_message" ]; then
+    if [ "$expected_message" = "$last_message" ]; then
         # the error was expected so it gets cleared
         unset "tsk_test_messages[last_idx]"
     else
-        # Show both the original and normalized versions to help with debugging
-        tsk_test_messages[last_idx]="$(cat <<EOF
-line $(_line_number): _expect_error
-    - expected: $normalized_expected
-    - received: $normalized_last
-EOF
-)"
+        # the error we expected was not the error we got
+        tsk_test_messages[last_idx]="line $(_line_number): _expect_error $(_format_diff "$expected_message" "$last_message")"
     fi
 }
 

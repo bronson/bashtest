@@ -43,14 +43,7 @@ test:file_is_not() {
     file_is "bbb" scratchfile
     _expect_error "line nnn: file_is expected 'bbb', got 'aaa'"
 
-#     _expect_error "$(cat <<EOF
-# line nnn: file_is expected:
-#     | bbb
-#     but was:
-#     | aaa
-# EOF)"
-
-    file_is "missing-file"
+    file_is "bbb" "missing-file"
     _expect_error "line nnn: file_is couldn't open 'missing-file'"
 
     file_is # no arguments
@@ -58,26 +51,32 @@ test:file_is_not() {
 }
 
 test:stdout_is() {
-    echo "     " > scratchfile
+    echo "     "
     stdout_is "     "
 }
 
 test:stdout_is_not() {
-    > scratchfile
+    echo ""
     stdout_is " "
-    _expect_error "line nnn: stdout_is expected ' ', got '    '"
+    _expect_error "line nnn: stdout_is expected ' ', got ''"
 }
 
 test:stderr_is() {
-    echo '  $zzz $zzz  ' > scratchfile
+    echo '  $zzz $zzz  ' >&2
     stderr_is '  $zzz $zzz  '
 }
 
 test:stderr_is_not() {
-    echo $'\n\n' > scratchfile
-    stderr_is true
-    # expecting a one line file because bash tends to ignore the trailing newline
-    _expect_error "line nnn: stderr_is expected 'true', got:"$'\n'"    | "
+    echo $'\n.\n' >&2
+    stderr_is "true"
+    _expect_error "$(cat <<EOF
+line nnn: stderr_is expected:
+    | true
+    but got:
+    |
+    | .
+EOF
+    )"
 }
 
 # This test should show a stderr assertion
