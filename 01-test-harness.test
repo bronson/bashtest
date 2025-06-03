@@ -36,6 +36,7 @@ test:stderr_is_works()
 {
     echo "test error message" >&2
     stderr_is "test error message"
+    # we checked stderr so this test should pass
 }
 
 test:stderr_contains_works()
@@ -69,6 +70,21 @@ test:framework_dir_works()
     is_eq 0 $?
 }
 
+# the before:each/after:all etc tests will test cache dir persistence
+test:cache_dir_works()
+{
+    local dir=$(cache_dir)
+    [ -d "$dir" ]                 # directory exists
+    is_eq 0 $?
+
+    echo "test data" > "$dir/test-file.txt"
+    file_is "test data" "$dir/test-file.txt"
+
+    # it's OK to leave data in the cache dir
+    # rm "$dir/test-file.txt"
+}
+
+# the before:each/after:all etc tests will test cache dir persistence
 # Test cleanup of test environment
 # test:cleanup_works()
 # {

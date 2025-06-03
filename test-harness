@@ -36,6 +36,10 @@
 #: - framework_dir: The directory containing the run-tests script.
 #:   If you have a helper script in the same directory as the run-tests
 #:   script, you can include it like this: `$(framework_dir)/helper.sh`
+#: - cache_dir: A temporary directory that is created when tests start
+#:   and removed when tests complete successfully. This directory is shared
+#:   across all tests and can be used for caching data between test runs.
+#:   Access it like this: `$(cache_dir)/my-data.txt`
 #:
 #: ## The Testfile
 #:
@@ -231,6 +235,11 @@ testfile_dir() {
 # Returns the directory of the test-harness script
 framework_dir() {
     dirname "$tsk_framework_path"
+}
+
+# Returns the shared cache directory that is available to all tests
+cache_dir() {
+    echo "$tsk_root_dir/cache"
 }
 
 # call this to make differences be displayed using `diff` rather than side-by-side
@@ -497,7 +506,7 @@ tsk_orig_path="$PATH"
 tsk_root_dir="$(_find_test_directory)"
 tsk_run_dir="$tsk_root_dir/run"
 tsk_artifacts_dir="$tsk_root_dir/artifacts"
-mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir" 2>&4 || exit 1
+mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir" "$tsk_root_dir/cache" 2>&4 || exit 1
 
 _run_tests
 
