@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# Quickly verify that the before/after hooks work. More exhaustive
+# testing will be performed in a different testfile.
+
+# Can't call cache_dir until the test harness is loaded.
+
+before:all() {
+    # variables defined in the before hooks will be shared by subsequent tests.
+    cache="$(cache_dir)"
+
+    if [ -n "$(ls -A "$cache_dir")" ]; then
+        abort "cache directory is not empty at start of test"
+    fi
+
+    echo "before all" > "$cache"/operations
+}
+
+# after:all() {
+    # because after:all runs after testing is finished, we can't verify it in
+    # this test run. It will be verified separately in another test file.
+# }
+
+before:each() {
+    echo "before each $1" >> "$cache"/operations
+}
+
+after:each() {
+    echo "after each $1" >>  "$cache"/operations
+}
+
+# name the tests to ensure they're run in order
+# TODO: normally you want to write your tests so they can be run in any order... not here.
+test:01-before_all_fired() {
+    file_is '' "$cache"/operations <<EOL
+before all
+before each test:01-before_all_fired
+EOL
+}
+
+test:02-before_each_fired_again() {
+    file_is '' "$cache"/operations <<EOL
+before all
+before each test:01-before_all_fired
+after each test:01-before_all_fired
+before each test:02-before_each_fired_again
+EOL
+}
+
+source "$(dirname "$0")/test-harness"

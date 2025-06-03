@@ -1,0 +1,13 @@
+#!/bin/bash
+
+# TODO: ensure after:all works
+# TODO: what happens if before:all and after:all generate stdout and stderr?
+# TODO: what happens if before:each and after:each generate stderr?
+# TODO: what happens if before:all and after:all make assertions?
+# TODO: test assertions in before:each and after:each.  (they count as the test failing)
+# TODO: can before:all and before:each skip the tests?
+# TODO: after:each should be able to run assertions on the tests's stdout and stderr
+    # TODO: and, if the after hook checks the stderr, then the test succeeds.
+# TODO: test calling abort in the hooks, especially before:all and after:all
+
+source "$(dirname "$0")/test-harness"

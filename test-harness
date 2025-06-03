@@ -41,6 +41,15 @@
 #:   across all tests and can be used for caching data between test runs.
 #:   Access it like this: `$(cache_dir)/my-data.txt`
 #:
+#: ### Lifecycle Hooks
+#:
+#: If your testfile defines any of the folllowing hooks, they'll be called during test execution:
+#:
+#: - before:all: Runs once before any tests are executed.
+#: - before:each: Runs before each test, receives the test name as an argument.
+#: - after:each: Runs after each test, receives the test name as an argument. Can perform assertions on the test output.
+#: - after:all: Runs once after all tests have completed.
+#:
 #: ## The Testfile
 #:
 #: Testfiles start by including the test framework:
@@ -409,6 +418,12 @@ _run_tests() {
     local test
 
     cd "$tsk_run_dir" || exit 1
+
+    # Run the before:all hook if defined
+    if type before:all &>/dev/null; then
+        before:all
+    fi
+
     for test in $(_find_tests); do
         tsk_test_name="$test"
         tsk_test_messages=()
@@ -425,7 +440,13 @@ _run_tests() {
             printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
         fi
 
+        if type before:each &>/dev/null; then
+            before:each "$tsk_test_name"
+        fi
         "$test"
+        if type after:each &>/dev/null; then
+            after:each "$tsk_test_name"
+        fi
 
         # Add this test's assertions to the total
         tsk_total_assertions=$((tsk_total_assertions + tsk_test_assertions))
@@ -484,6 +505,10 @@ _run_tests() {
             fi
         fi
     done
+
+    if type after:all &>/dev/null; then
+        after:all
+    fi
 }
 
 
