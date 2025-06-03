@@ -80,11 +80,30 @@ declare -a tsk_test_messages=() # array containing a message for each error
 tsk_test_assertions=0 # current number of assertions made in the test
 tsk_stderr_checked=false # whether stderr has been explicitly checked
 
+# TODO: this is a misnomer... we also use tsk_use_color to indicate
+# if we should use control characters to do better terminal output
+if [ -z "${tsk_use_color}" ]; then
+    tsk_use_color=false
+    if [ -t 3 ]; then
+        tsk_use_color=true
+    fi
+fi
+
 # Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+# TODO: get these colors out of the test global scope
+if [ "$tsk_use_color" = true ]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m' # No Color
+    CR=$'\r'
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    NC=''
+    CR=''
+fi
 
 # save stdout and stderr so we can restore them after testing
 exec 3>&1 4>&2
@@ -155,7 +174,7 @@ abort() {
     # Potentially skip could use this technique too but that's
     # probably not worth it.
     local errmsg="line $(_line_number): $1"
-    printf "\r %02d ${RED}ABORT${NC}  $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
+    printf "${CR} %02d ${RED}ABORT${NC}  $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
     printf "${RED}TEST ABORTED${NC}\n" >&3
     exit 127
 }
@@ -369,8 +388,10 @@ _run_tests() {
         # in case the previous test redirected its output
         exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"
 
-        # no newline on this line, end_test will back up and print the result
-        printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
+        if [ -n "$CR" ]; then
+            # no newline on this line, end_test will back up and print the result
+            printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
+        fi
 
         "$test"
 
@@ -424,7 +445,7 @@ _run_tests() {
                 errmsg="($tsk_test_assertions $(pluralize "$tsk_test_assertions" "assertion"))"
             fi
 
-            printf "\r %02d $res   $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
+            printf "$CR %02d $res   $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
 
             if [ ${#tsk_test_messages[@]} -gt 0 ]; then
                 for msg in "${tsk_test_messages[@]}"; do
