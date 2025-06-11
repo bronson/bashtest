@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# quick test to make sure the jobrunner works
+
+# 1:26sec, 2:13s, 3:9s, 4:7s, 6:6s 8:4s 10:4s
+
+max_simultaneous_jobs=4
+
+jobs=(
+    "runjob A  2 "
+    "runjob B  3 "
+    "runjob C  4 "
+    "runjob D  3 "
+    "runjob E  1 "
+    "runjob F  2 "
+    "runjob G  3 "
+    "runjob H  4 "
+    "runjob I  3 "
+    "runjob J  1 "
+)
+
+runjob() {
+    local jobno=$1
+    local duration=$2
+
+    printf "%02d ++ $jobno $duration\n" $SECONDS
+    sleep $duration
+    printf "%02d -- $jobno $duration\n" $SECONDS
+}
+
+running_jobs=0
+
+for ((i=1; i<=max_simultaneous_jobs; i++)); do
+  dir_name="dir-$(printf "%02d" $i)"
+  rm -rf "$dir_name"
+  mkdir -p "$dir_name"
+  echo "Created directory: $dir_name"
+done
+
+# Start timing the job execution
+SECONDS=0
+
+for job in "${jobs[@]}"; do
+  if [ "$running_jobs" -ge "$max_simultaneous_jobs" ]; then
+    wait -n
+    running_jobs=$((running_jobs - 1))
+  fi
+
+  (eval "$job") &
+  running_jobs=$((running_jobs + 1))
+done
+
+wait     # wait for the remaining jobs to finish
+echo "All jobs completed."
+echo "Total execution time: $SECONDS seconds"
