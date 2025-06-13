@@ -60,49 +60,30 @@
 
 if [ -n "$tsk_framework_path" ]; then
     # test harness is already loaded, don't load again.
-    return   # calling exit would terminate the test currently in progress.
+    return # calling exit would terminate the test currently in progress.
 fi
+
+
+#
+#     The Global Environment
+#
+
+# TODO: ensure we don't leak any variables into the test other than those named here
 
 # we reserve the tsk_ prefix to prevent incurring any conflicts
 # with variables in the tests themselves. TODO: can we test if we
 # accidentally leak any variables or non-api functions into the testfiles?
 
 # Store the path to the run-tests.sh script for later use
+tsk_orig_cwd="$(pwd)"     # save the directory we were started in
 tsk_framework_path="$(readlink -f "${BASH_SOURCE[0]}")"
 tsk_testfile_path=""  # the testfile that we're interpreting or blank if no file
 
-if [ "${BASH_SOURCE[1]}" != "" ]; then
-    # if the test harness is being sourced, it's from a test file
-    tsk_testfile_path="$(readlink -f "${BASH_SOURCE[1]}")"
-else
-    # otherwise, read the tests from stdin without a testfile
-    # (this is used when testing the test harness itself)
-    tsk_testfile_path="STDIN"
-    source <(cat)
-fi
-
-# save the environment so it can be restored at the end
-tsk_orig_cwd=""       # original directory before testing started
-tsk_orig_path=""      # original PATH before testing started
-exec 3>&1 4>&2        # copy stdout and stderr to FDs 3 and 4
-
-tsk_total_count=0     # current number of tests run
-tsk_pass_count=0      # current number of tests passed
-tsk_fail_count=0      # current number of tests failed
-tsk_skip_count=0      # current number of tests skipped
-tsk_total_assertions=0 # total number of assertions made
-tsk_root_dir=""       # main test directory
-tsk_run_dir=""        # directory where tests run
-tsk_artifacts_dir=""  # directory for temporary test artifacts
-
-# these variables are reset every time a new test is run
-tsk_test_name=""      # the name of the test currently being run
-declare -a tsk_test_messages=() # array containing a message for each error
-tsk_test_assertions=0 # current number of assertions made in the test
-tsk_stderr_checked=false # whether stderr has been explicitly checked
+# tests have their output redirected to files so we need to:
+exec 3>&1 4>&2        # save stdout and stderr to FDs 3 and 4
 
 # TODO: this is a misnomer... we also use tsk_use_color to indicate
-# if we should use control characters to do better terminal output
+# if we should use control codes to do curses-style terminal output
 if [ -z "${tsk_use_color}" ]; then
     tsk_use_color=false
     if [ -t 3 ]; then
@@ -125,9 +106,6 @@ else
     NC=''
     CR=''
 fi
-
-# save stdout and stderr so we can restore them after testing
-exec 3>&1 4>&2
 
 
 #
@@ -234,6 +212,7 @@ EOF
 
 # Returns the directory of the currently running testfile
 testfile_dir() {
+    # TODO/TOTEST: what if the test is coming from stdin? dirname of STDIN?
     if [ -z "$tsk_testfile_path" ]; then
         echo "Error: No testfile detected. THIS IS A BUG. exiting now." >&4
         exit 1
@@ -270,7 +249,7 @@ pluralize() {
 
 
 #
-#    Testing internals
+#    Code to run the tests
 #
 
 # returns the line number of the caller of the given frame
@@ -414,7 +393,7 @@ _find_tests() {
     # in the file, not in alphabetical order.
 }
 
-_run_tests() {
+_run_testfile_tests() {
     local test
 
     cd "$tsk_run_dir" || exit 1
@@ -511,27 +490,50 @@ _run_tests() {
     fi
 }
 
+# call once before running any tests
+_prepare_test_environment() {
+    # TODO: ensure local directory is writeable first, bounce to /tmp if not
+    # TODO: option to create and mount a ramdisk to run tests
+    tsk_root_dir="$(_find_test_directory)"
+    tsk_run_dir="$tsk_root_dir/run"
+    tsk_artifacts_dir="$tsk_root_dir/artifacts"
+    mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir" "$tsk_root_dir/cache" 2>&4 || exit 1
+}
 
-tsk_total_count=0
-tsk_pass_count=0
-tsk_fail_count=0
-tsk_skip_count=0
-tsk_total_assertions=0
+# call once when testing is finished and before printing the results
+_clean_up_test_environment() { :; }
 
-tsk_test_name=""
-tsk_test_assertions=0
 
-# TODO: ensure local directory is writeable first, bounce to /tmp if not
-# TODO: option to create and mount a ramdisk to run tests
+tsk_root_dir=""       # main test directory
+tsk_run_dir=""        # directory where each test is run
+tsk_artifacts_dir=""  # directory for temporary test artifacts
 
-# Save current directory and PATH
-tsk_orig_cwd="$(pwd)"
-tsk_orig_path="$PATH"
+# these variables are reset every time a new test is run
+tsk_test_name=""      # the name of the test function currently being run
+declare -a tsk_test_messages=() # array containing a message for each error
+tsk_test_assertions=0 # current number of assertions made by the test
+tsk_stderr_checked=false # whether stderr has been explicitly checked
 
-tsk_root_dir="$(_find_test_directory)"
-tsk_run_dir="$tsk_root_dir/run"
-tsk_artifacts_dir="$tsk_root_dir/artifacts"
-mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir" "$tsk_root_dir/cache" 2>&4 || exit 1
+tsk_total_count=0     # current number of tests run
+tsk_pass_count=0      # current number of tests passed
+tsk_fail_count=0      # current number of tests failed
+tsk_skip_count=0      # current number of tests skipped
+tsk_total_assertions=0 # total number of assertions made
 
-_run_tests
-_print_test_results
+if [ $# -eq 0 ]; then
+    if [ "${BASH_SOURCE[1]}" != "" ]; then
+        # the test harness is being sourced from a test file
+        # (for example, executing the test directly: ./01-testfile.test)
+        tsk_testfile_path="$(readlink -f "${BASH_SOURCE[1]}")"
+    else
+        # otherwise, read the tests from stdin without a testfile
+        # (often when testing test-harness itself: cat test | bash test-harness)
+        tsk_testfile_path="STDIN"
+        source <(cat)
+    fi
+
+    _prepare_test_environment
+    _run_testfile_tests
+    _clean_up_test_environment
+    _print_test_results
+fi
