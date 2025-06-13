@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# Runs each test across a range of simultaneous jobs
+# and prints the results in a table.
+
+simultaneous_jobs=(1 2 4 8 16 32 64 128 256)
+scripts=(job-test-baseline job-test-newdirs job-test-waitp)
+declare -A results
+
+jobs_file="$1"
+if [ -z "$jobs_file" ]; then
+    echo "Usage: $0 <jobfile>"
+    exit 1
+fi
+
+for (( i=${#simultaneous_jobs[@]}-1; i>=0; i-- )); do
+    maxjobs="${simultaneous_jobs[$i]}"
+    for script in "${scripts[@]}"; do
+        echo "running $script with $maxjobs maximum jobs"
+        start_time="$(date +%s%3N)"
+
+        # the overhead of the test runner appears to be around 4ms
+        # sleep $(bc -l <<< $maxjobs/1000 )
+
+        "./$script" "$maxjobs" < "$jobs_file"
+
+        end_time="$(date +%s%3N)"
+        elapsed="$((end_time - start_time))"
+        echo "$elapsed"
+
+        results[${script},${maxjobs}]="$elapsed"
+    done
+done
+
+
+# print the markdown table
+
+echo
+echo -n "| test |"
+for maxjobs in "${simultaneous_jobs[@]}"; do
+    echo -n " $maxjobs |"
+done
+echo
+
+echo -n "| :--- |"
+for maxjobs in "${simultaneous_jobs[@]}"; do
+    echo -n " ---: |"
+done
+echo
+
+for script in "${scripts[@]}"; do
+    echo -n "| $script |"
+    for maxjobs in "${simultaneous_jobs[@]}"; do
+        echo -n " ${results[${script},${maxjobs}]} |"
+    done
+    echo
+done
+
+echo
+echo "done."

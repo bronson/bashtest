@@ -26,7 +26,11 @@ quickjob() {
 }
 
 
-# create test directories
+rm -rf dir-test
+mkdir dir-test
+cd dir-test
+
+# create the directories potentially needed to run all jobs in parallel
 for ((i=1; i<=max_simultaneous_jobs; i++)); do
     dir_name="dir-$(printf "%02d" $i)"
     rm -rf "$dir_name"
