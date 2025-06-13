@@ -1,0 +1,103 @@
+#!/bin/bash
+
+# WARNING: UNFINISHED
+# I'm not real happy with how the fifo based approach looks,
+# and I'm still stung by all xenix's fifo bugs... if I can avoid
+# using fifos, I will. And it appears I can.
+
+
+# Token-based job execution system
+# Each directory is a token, jobs run in their assigned directory and return the token to the fifo when done
+
+max_simultaneous_jobs=2
+
+# Define jobs to run (format: job_name sleep_duration)
+jobs=(
+    "runjob A 2"
+    "runjob B 3"
+    "runjob C 4"
+    "runjob D 3"
+    "runjob E 1"
+    "runjob F 2"
+    "runjob G 3"
+    "runjob H 4"
+    "runjob I 3"
+    "runjob J 1"
+)
+
+# Create token FIFO for passing tokens between processes
+TOKEN_FIFO="/tmp/token_fifo_$$"
+rm -f "$TOKEN_FIFO"
+mkfifo "$TOKEN_FIFO"
+
+# Function to run a job
+runjob() {
+    local jobname=$1
+    local duration=$2
+    local token_dir=$(pwd)  # Current directory is the token directory
+    
+    # Create a file with job name and print start message
+    touch "$jobname"
+    printf "%02d ++ Job %s started in %s (duration: %s)\n" $SECONDS "$jobname" "$(basename "$token_dir")" "$duration"
+    
+    # Simulate job work
+    sleep "$duration"
+    
+    # Print completion message
+    printf "%02d -- Job %s completed in %s\n" $SECONDS "$jobname" "$(basename "$token_dir")"
+    
+    # Return the token to the pool when done
+    echo "$token_dir" > "$TOKEN_FIFO"
+}
+
+# Create directory tokens
+echo "Creating directory tokens..."
+for ((i=1; i<=max_simultaneous_jobs; i++)); do
+    token="dir-$(printf "%02d" $i)"
+    rm -rf "$token"
+    mkdir -p "$token"
+    
+    # Initialize token pool
+    echo "$token" > "$TOKEN_FIFO" &
+done
+
+# Start timing
+SECONDS=0
+
+# Launch background token collector for zombies
+(
+    # Ensure we collect exactly the right number of tokens at the end
+    remaining_tokens=$max_simultaneous_jobs
+    while [ $remaining_tokens -gt 0 ]; do
+        read -r token < "$TOKEN_FIFO"
+        remaining_tokens=$((remaining_tokens - 1))
+    done
+) &
+collector_pid=$!
+
+# Process all jobs
+pending_jobs=${#jobs[@]}
+for job in "${jobs[@]}"; do
+    # Get a token (blocks until one is available)
+    read -r token < "$TOKEN_FIFO"
+    echo "$(printf "%02d" $SECONDS) >> Acquired token: $(basename "$token") for next job"
+    
+    # Launch job with the token
+    (
+        cd "$token" || exit 1
+        eval "$job"
+    ) &
+    
+    pending_jobs=$((pending_jobs - 1))
+    echo "$(printf "%02d" $SECONDS) -- Jobs remaining: $pending_jobs"
+done
+
+# Wait for all jobs to complete
+wait
+
+# Clean up
+kill $collector_pid 2>/dev/null
+rm -f "$TOKEN_FIFO"
+
+echo "All jobs completed."
+echo "Total execution time: $SECONDS seconds"

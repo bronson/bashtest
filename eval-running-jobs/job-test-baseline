@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Barebones code to run a certain number of jobs in parallel.
+#
+# Usage: ./job-test 12 < timed-jobs
+#
+# This file isn't adequate though: each job needs to run in its own directory.
+#
+# I found three ways to implement this:
+#
+# The results:
+
+# 1:26sec, 2:13s, 3:9s, 4:7s, 6:6s 8:4s 10:4s
+
+max_simultaneous_jobs=$1
+if [ -z "$max_simultaneous_jobs" ]; then
+    max_simultaneous_jobs=4
+fi
+
+runjob() {
+    local jobno=$1
+    local duration=$2
+
+    printf "%02d ++ $jobno $duration\n" $SECONDS
+    echo "$1" :: "$3" >> jobs
+    sleep $duration
+    printf "%02d -- $jobno $duration\n" $SECONDS
+}
+
+# zero delay, crank as fast as you can
+quickjob() {
+    echo "$1" :: "$3" >> jobs
+}
+
+
+rm jobs
+running_jobs=0
+SECONDS=0  # start BASH timer
+
+# of course running_jobs can be optimized away because wait -n will only return
+# a single exited job at a time (so start one job every time one exits)
+# but this is good enough for now.
+while true; do
+  if [ "$running_jobs" -ge "$max_simultaneous_jobs" ]; then
+    wait -n
+    running_jobs=$((running_jobs - 1))
+  fi
+
+  read -r job_cmd || break
+  (eval "$job_cmd") &
+
+  running_jobs=$((running_jobs + 1))
+done
+
+wait     # wait for the remaining jobs to finish
+echo "All jobs completed."
+echo "Total execution time: $SECONDS seconds"

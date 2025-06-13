@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# Like job-test but runs each test in a new directory.
+#
+# This removes the need to associate each job with its own directory,
+# leading to simpler code but maybe directory overhead will be too high.
+#
+
+# 1:26sec, 2:13s, 3:9s, 4:7s, 6:6s 8:4s 10:4s
+
+max_simultaneous_jobs=$1
+if [ -z "$max_simultaneous_jobs" ]; then
+    max_simultaneous_jobs=4
+fi
+
+runjob() {
+    local jobno=$1
+    local duration=$2
+
+    printf "%02d ++ $jobno $duration\n" $SECONDS
+    echo "$1" :: "$3" >> jobs
+    sleep $duration
+    printf "%02d -- $jobno $duration\n" $SECONDS
+}
+
+# zero delay, crank as fast as you can
+quickjob() {
+    echo "$1" :: "$3" >> jobs
+}
+
+running_jobs=0
+
+rm -rf dir-test
+mkdir dir-test
+cd dir-test
+
+SECONDS=0
+
+jobno=0
+while true; do
+  if [ "$running_jobs" -ge "$max_simultaneous_jobs" ]; then
+    wait -n
+    running_jobs=$((running_jobs - 1))
+  fi
+
+  ((jobno++))
+  read -r job_cmd || break
+  (mkdir $jobno; cd $jobno; eval "$job_cmd" owndir; cd ..; rm -r $jobno) &
+
+  running_jobs=$((running_jobs + 1))
+done
+
+wait     # wait for the remaining jobs to finish
+echo "All jobs completed."
+echo "Total execution time: $SECONDS seconds"

@@ -1,0 +1,94 @@
+#!/bin/bash
+
+# prototyping the job runner to see what technique to use
+# Uses wait -n -p to identify completed jobs and reuse their directories
+
+# Times: 1 simultaneous job: 26sec, 2:13sec, 3:9s, 4:7s, 6:6s 8:4s 10:4s
+
+max_simultaneous_jobs=$1
+if [ -z "$max_simultaneous_jobs" ]; then
+    max_simultaneous_jobs=4
+fi
+
+runjob() {
+    local jobno=$1
+    local duration=$2
+
+    printf "%02d ++ $jobno $duration\n" $SECONDS
+    echo "$1" :: "$3" >> jobs
+    sleep $duration
+    printf "%02d -- $jobno $duration\n" $SECONDS
+}
+
+# zero delay, crank as fast as you can
+quickjob() {
+    echo "$1" :: "$3" >> jobs
+}
+
+
+# create test directories
+for ((i=1; i<=max_simultaneous_jobs; i++)); do
+    dir_name="dir-$(printf "%02d" $i)"
+    rm -rf "$dir_name"
+    mkdir -p "$dir_name"
+done
+
+SECONDS=0
+
+# Initialize directory tracking
+declare -A pid_to_dir   # Maps PIDs to directory numbers
+declare -a free_dirs    # List of available directory numbers
+
+# Initially all directories are free
+for ((i=1; i<=max_simultaneous_jobs; i++)); do
+    free_dirs+=($i)
+done
+
+# Process all jobs
+job_index=0
+running_jobs=0
+
+while [ -z "$done" ] || [[ $running_jobs -gt 0 ]]; do
+    # Start as many jobs as we have free directories
+    while [ -z "$done" ] && [[ ${#free_dirs[@]} -gt 0 ]]; do
+        # Get a free directory
+        dir_num=${free_dirs[0]}
+        free_dirs=("${free_dirs[@]:1}")  # Remove first element
+
+        if read -r job_cmd; then
+            (
+                cd "dir-$(printf "%02d" $dir_num)" || exit 1
+                eval "$job_cmd" "$dir_num"
+            ) &
+
+            # Record which directory this PID is using
+            pid=$!
+            pid_to_dir[$pid]=$dir_num
+
+            job_index=$((job_index + 1))
+            running_jobs=$((running_jobs + 1))
+        else
+            done=true
+        fi
+    done
+
+    # If no more jobs to start or no free directories, wait for a job to finish
+    if [[ $running_jobs -gt 0 ]]; then
+        # Use wait -n -p to get the PID of the finished job
+        if ! wait -n -p exited_pid; then
+            echo "JOB FAILED (PID: $exited_pid)"
+        fi
+
+        # Get the directory this job was using
+        dir_num=${pid_to_dir[$exited_pid]}
+
+        # Free the directory
+        free_dirs+=($dir_num)
+        unset pid_to_dir[$exited_pid]
+
+        running_jobs=$((running_jobs - 1))
+    fi
+done
+
+echo "All jobs completed."
+echo "Total execution time: $SECONDS seconds"
