@@ -72,7 +72,7 @@ of maximum simultaneous jobs.
 ./create-job-table quick-jobs
 ```
 
-And it formats its results in a Markdown table:
+And it formats its results in a Markdown table (times are in milliseconds):
 
 | test | 1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256 |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -103,9 +103,47 @@ I guess the kernel filesystem has more optimization opportunities than the
 kernel scheduler? Also, bash job scheduling works but is probably not meant
 to be very quick.
 
+Here's some corroboration...
+
+```txt
+❯ time ./job-test-newdirs 20 < quick-jobs
+All jobs completed.
+Total execution time: 2 seconds
+
+real	0m2.088s
+user	0m6.700s
+sys	0m18.716s
+```
+
+So the test run took 2.1 seconds to complete, and it took 18.7 seconds
+of CPU time to do that.
+
+That test always requires at least 16 seconds of CPU time to complete.
+On a modern OS, however, it parallels really well.
+
+job-test-waitp only requires around 5 seconds of CPU time to do the same job
+(so less than 1/3 of that required by job-test-newdirs), but it doesn't actually
+run any faster. If anything, it's consistently a little slower, presumably because
+it's doing more coordination in Bash rather than the kernel.
+
+```txt
+❯ time ./job-test-waitp 2 < quick-jobs
+All jobs completed.
+Total execution time: 5 seconds
+
+real	0m5.061s
+user	0m5.833s
+sys	0m5.054s
+```
+
 ## Conclusion
 
-The simpler implementation is also the fastest! And, wow, it's surprisingly fast.
+The simpler implementation is also the fastest! And, if you're running
+the operations in parallel, it's surprisingly fast.
 
-Well that's unexpected good news. Today, at least, there's no need to choose between
-speed and code complexity. The same algorithm delivers both.
+The implications of this are surprising. It appears we should offload as much complexity
+as we can onto the filesystem and run the tests massively in parallel. That's much
+easier code to write and debug.
+
+This is unexpected good news. Today, at least, there's no need to choose between
+speed and code complexity. The simple algorithm is as fast as the complex one.

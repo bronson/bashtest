@@ -394,8 +394,6 @@ _find_tests() {
 }
 
 _run_testfile_tests() {
-    local test
-
     cd "$tsk_run_dir" || exit 1
 
     # Run the before:all hook if defined
@@ -403,13 +401,15 @@ _run_testfile_tests() {
         before:all
     fi
 
-    for test in $(_find_tests); do
-        tsk_test_name="$test"
-        tsk_test_messages=()
-        tsk_test_assertions=0
-        tsk_stderr_checked=false
+    local tsk_test_name
+    for tsk_test_name in $(_find_tests); do
+        # these variables are used when the test is run
+        local tsk_test_messages=()
+        local tsk_test_assertions=0
+        local tsk_stderr_checked=false
+        local tsk_test_want_format="" # TODO: this sucks.
+
         tsk_total_count=$((tsk_total_count + 1))
-        tsk_test_want_format=""
 
         # in case the previous test redirected its output
         exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"
@@ -422,7 +422,7 @@ _run_testfile_tests() {
         if type before:each &>/dev/null; then
             before:each "$tsk_test_name"
         fi
-        "$test"
+        "$tsk_test_name" "$tsk_test_name"   # TODO: useful arguments?
         if type after:each &>/dev/null; then
             after:each "$tsk_test_name"
         fi
@@ -492,6 +492,17 @@ _run_testfile_tests() {
 
 # call once before running any tests
 _prepare_test_environment() {
+    # todo: any way to turn these into locals?
+    tsk_root_dir=""       # main test directory
+    tsk_run_dir=""        # directory where each test is run
+    tsk_artifacts_dir=""  # directory for temporary test artifacts
+
+    tsk_total_count=0     # current number of tests run
+    tsk_pass_count=0      # current number of tests passed
+    tsk_fail_count=0      # current number of tests failed
+    tsk_skip_count=0      # current number of tests skipped
+    tsk_total_assertions=0 # total number of assertions made
+
     # TODO: ensure local directory is writeable first, bounce to /tmp if not
     # TODO: option to create and mount a ramdisk to run tests
     tsk_root_dir="$(_find_test_directory)"
@@ -499,26 +510,6 @@ _prepare_test_environment() {
     tsk_artifacts_dir="$tsk_root_dir/artifacts"
     mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir" "$tsk_root_dir/cache" 2>&4 || exit 1
 }
-
-# call once when testing is finished and before printing the results
-_clean_up_test_environment() { :; }
-
-
-tsk_root_dir=""       # main test directory
-tsk_run_dir=""        # directory where each test is run
-tsk_artifacts_dir=""  # directory for temporary test artifacts
-
-# these variables are reset every time a new test is run
-tsk_test_name=""      # the name of the test function currently being run
-declare -a tsk_test_messages=() # array containing a message for each error
-tsk_test_assertions=0 # current number of assertions made by the test
-tsk_stderr_checked=false # whether stderr has been explicitly checked
-
-tsk_total_count=0     # current number of tests run
-tsk_pass_count=0      # current number of tests passed
-tsk_fail_count=0      # current number of tests failed
-tsk_skip_count=0      # current number of tests skipped
-tsk_total_assertions=0 # total number of assertions made
 
 if [ $# -eq 0 ]; then
     if [ "${BASH_SOURCE[1]}" != "" ]; then
@@ -534,6 +525,5 @@ if [ $# -eq 0 ]; then
 
     _prepare_test_environment
     _run_testfile_tests
-    _clean_up_test_environment
     _print_test_results
 fi
