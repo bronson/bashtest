@@ -393,7 +393,42 @@ _find_tests() {
     # in the file, not in alphabetical order.
 }
 
+
+# called before each test starts
+_list_formatter_pre() {
+    # only do this if we're pretty-printing to a terminal
+    if [ -n "$CR" ]; then
+        # no newline on this line, end_test will back up and print the result
+        printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
+    fi
+}
+
+# called when the test is complete
+_list_formatter_post() {
+    local result
+    case "$1" in
+        pass) result="${GREEN}pass${NC}" ;;
+        skip) result="${YELLOW}skip${NC}" ;;
+        fail) result="${RED}FAIL${NC}" ;;
+        *) result="${RED}INTERNAL ERROR: ${result}${NC}" ;;
+    esac
+
+    local errmsg=''
+    local num_fails="${#tsk_test_messages[@]}"
+    if [ "$num_fails" -gt 0 ]; then
+        errmsg=" ($num_fails $(pluralize "$num_fails" "error"))"
+    fi
+
+    printf "$CR %02d $result   $tsk_test_name$errmsg\n" "$tsk_total_count" >&3
+    if [ ${#tsk_test_messages[@]} -gt 0 ]; then
+        for msg in "${tsk_test_messages[@]}"; do
+            echo "  - $msg" >&3
+        done
+    fi
+}
+
 _run_testfile_tests() {
+    local formatter="$1"
     cd "$tsk_run_dir" || exit 1
 
     # Run the before:all hook if defined
@@ -413,11 +448,7 @@ _run_testfile_tests() {
 
         # in case the previous test redirected its output
         exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"
-
-        if [ -n "$CR" ]; then
-            # no newline on this line, end_test will back up and print the result
-            printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
-        fi
+        "_${formatter}_pre"
 
         if type before:each &>/dev/null; then
             before:each "$tsk_test_name"
@@ -439,21 +470,21 @@ _run_testfile_tests() {
         # TODO
         # _check_for_abandoned_files
 
-        local res
+        local result
         if [ "$tsk_total_count" -gt 0 ]; then
             # Check if the test made any assertions
             if [ $tsk_test_assertions -eq 0 ]; then
                 # Test made no assertions, mark as skipped
                 tsk_skip_count=$((tsk_skip_count + 1))
-                res="${YELLOW}skip${NC}"
+                result=skip
             elif [ ${#tsk_test_messages[@]} -eq 0 ]; then
                 # Test passed (made assertions with no errors)
                 tsk_pass_count=$((tsk_pass_count + 1))
-                res="${GREEN}pass${NC}"
+                result=pass
             else
                 # test had one or more failing assertions
                 tsk_fail_count=$((tsk_fail_count + 1))
-                res="${RED}FAIL${NC}"
+                result=fail
 
                 # Since the test failed, rename the run directory to preserve the state
                 local safe_name=$(echo "$tsk_test_name" | tr ' /\\:*?"<>|' '_')
@@ -469,19 +500,7 @@ _run_testfile_tests() {
                 fi
             fi
 
-            local errmsg=''
-            local num_fails="${#tsk_test_messages[@]}"
-            if [ "$num_fails" -gt 0 ]; then
-                errmsg=" ($num_fails $(pluralize "$num_fails" "error"))"
-            fi
-
-            printf "$CR %02d $res   $tsk_test_name$errmsg\n" "$tsk_total_count" >&3
-
-            if [ ${#tsk_test_messages[@]} -gt 0 ]; then
-                for msg in "${tsk_test_messages[@]}"; do
-                    echo "  - $msg" >&3
-                done
-            fi
+            "_${formatter}_post" "$result"
         fi
     done
 
@@ -524,6 +543,6 @@ if [ $# -eq 0 ]; then
     fi
 
     _prepare_test_environment
-    _run_testfile_tests
+    _run_testfile_tests list_formatter
     _print_test_results
 fi
