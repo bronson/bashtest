@@ -10,4 +10,4 @@
     # TODO: and, if the after hook checks the stderr, then the test succeeds.
 # TODO: test calling abort in the hooks, especially before:all and after:all
 
-source "$(dirname "$0")/test-harness"
+source "$(dirname "$BASH_SOURCE")/test-harness"

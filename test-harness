@@ -55,7 +55,7 @@
 #: Testfiles start by including the test framework:
 #:
 #: ```bash
-#: source "$(dirname "$0")/../run-tests.sh"
+#: source "$(dirname "$BASH_SOURCE")/../run-tests.sh"
 #: ```
 
 if [ -n "$tsk_framework_file" ]; then
@@ -190,10 +190,10 @@ mock() {
 
     # Create the mock directory and add it to PATH if needed
     if [ ! -d "$mock_dir" ]; then
-        mkdir -p "$mock_dir"
+        mkdir -p "$mock_dir" 2>&4 || exit 1
     fi
 
-    # Ensure we have an absolute path for the mock directory
+    # Ensure we have an absolute path for the mock directory for PATH
     mock_dir="$(readlink -f "$mock_dir")"
     executable="$mock_dir/$command"
 
@@ -224,7 +224,7 @@ framework_dir() {
     dirname "$tsk_framework_file"
 }
 
-# Returns the shared cache directory that is available to all tests
+# Returns the shared cache directory that is available to all tests in the current testfile
 cache_dir() {
     echo "$tsk_root_dir/cache"
 }
@@ -371,6 +371,7 @@ _print_test_results() {
     echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${assertions}${NC}" >&3
 }
 
+# creates a new directory for testing inside the current working directory
 _find_test_directory() {
     local dir_num=1
     while [ -e "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)" ]; do
@@ -392,6 +393,16 @@ _find_tests() {
     # in the file, not in alphabetical order.
 }
 
+_dot_formatter_pre_test() { :; }
+
+_dot_formatter_post_test() {
+    case "$1" in
+        pass) echo -n '.' >&3 ;;
+        skip) echo -n 's' >&3 ;;
+        fail) echo -n 'F' >&3 ;;
+        *) echo -n 'E' >&3 ;;
+    esac
+}
 
 # called before each test starts
 _list_formatter_pre_test() {
@@ -476,13 +487,12 @@ _run_testfile_tests() {
 
         local result
         if [ "$tsk_total_count" -gt 0 ]; then
-            # Check if the test made any assertions
             if [ $tsk_test_assertions -eq 0 ]; then
-                # Test made no assertions, mark as skipped
+                # Test made no assertions so call it skipped
                 tsk_skip_count=$((tsk_skip_count + 1))
                 result=skip
             elif [ ${#tsk_test_messages[@]} -eq 0 ]; then
-                # Test passed (made assertions with no errors)
+                # Test passed (made assertions and no errors)
                 tsk_pass_count=$((tsk_pass_count + 1))
                 result=pass
             else
@@ -515,12 +525,18 @@ _run_testfile_tests() {
     fi
 }
 
-# creates and cd's into a suitable directory for testing
+# TODO: test running tests in the testfile in parallel
+# testing hierarchy:
+# - tsk_root_dir         root for this particular testfile
+#   - cache              a directory shared by all tests in the testfile
+#   - run                the current test's cwd, empty at start of test (TODO: parallel?)
+#   - test-mocks         directory containing the current test's mocks
+#   - test-stdout        file, the current test's stdout
+#   - test-stderr        file, the current test's stderr
+
+# creates and cds into a suitable directory for testing
 # call once before running any tests
 _prepare_test_environment() {
-    # todo: any way to turn these into locals?
-    tsk_root_dir=""       # main test directory
-
     tsk_total_count=0     # current number of tests run
     tsk_pass_count=0      # current number of tests passed
     tsk_fail_count=0      # current number of tests failed
@@ -535,7 +551,8 @@ _prepare_test_environment() {
     mkdir -p "$tsk_root_dir"
 }
 
-if [ $# -eq 0 ]; then
+# run tests unless being loaded by another script
+if [ -z "$tsk_load_only" ]; then
     _prepare_test_environment
     if [ "${BASH_SOURCE[1]}" != "" ]; then
         # the test harness is being sourced from a test file

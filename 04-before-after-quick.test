@@ -9,7 +9,7 @@ before:all() {
     # variables defined in the before hooks will be shared by subsequent tests.
     cache="$(cache_dir)"
 
-    if [ -n "$(ls -A "$cache_dir")" ]; then
+    if [ -n "$(ls -A "$cache")" ]; then
         # can't make an assertion in before:all/after:all.
         abort "cache directory is not empty at start of test"
     fi
@@ -49,4 +49,4 @@ before each test:02-before_each_fired_again
 EOL
 }
 
-source "$(dirname "$0")/test-harness"
+source "$(dirname "$BASH_SOURCE")/test-harness"

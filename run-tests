@@ -1,0 +1,74 @@
+#!/bin/bash
+
+testfiles=()
+max_jobs=12  # not the fastest but should be reasonably close
+
+# TODO: move argument handling into the test harness so you can pass
+# arguments when running testfiles directly?
+while (( "$#" )); do case $1 in
+    -w|--watch) WATCH=true; shift;;               # TODO
+    -n|--name|--number) NAME="$2"; shift; shift;; # TODO
+    -j|--jobs) max_jobs="$2"; shift; shift;;
+    *) testfiles+=("$1"); shift;;
+esac; done
+
+# ensure max_jobs is a positive integer
+if [[ ! "$max_jobs" =~ ^[0-9]+$ ]]; then
+    echo "invalid max jobs: '$max_jobs'"
+fi
+
+# If no test files were specified, run all .test files recursively
+if [ ${#testfiles[@]} -eq 0 ]; then
+    while IFS= read -r file; do
+        testfiles+=("$file")
+    done < <(find . -type f -name "*.test")
+
+    if [ ${#testfiles[@]} -eq 0 ]; then
+        echo "No testfiles found"
+        echo "Testfile names must end in '.test'"
+        exit 120
+    fi
+fi
+
+
+# load the test harness once before forking subshells
+tsk_load_only=1 source "$(dirname "$0")/test-harness"
+if [ "$?" -ne 0 ]; then
+    echo "Couln't find the test-harness file!" >&2
+    echo "Put test-harness in the same directory as test-runner." >&2
+    exit 121
+fi
+
+# given a testfile, ensure we return a unique name for this test
+# even if other testfiles have the same identical name
+_get_testfile_unique_dirname() {
+    local testfile="$1"
+    local filename="${testfile##*/}"     # remove leading directories
+    filename="${filename%.test}"   # remove trailing ".test"
+    echo "$filename--$testfile_count"
+}
+
+_prepare_test_environment
+running_jobs=0   # TODO _tsk these?
+testfile_count=0
+for testfile in "${testfiles[@]}"; do
+    testfile_count=$((testfile_count + 1))
+    if [ "$running_jobs" -ge "$max_jobs" ]; then
+        wait -n 1
+        running_jobs=$((running_jobs - 1))
+    fi
+
+    (
+        source "$testfile"  # won't run the test because the harness is already loaded
+        tsk_root_dir="$tsk_root_dir/$(_get_testfile_unique_dirname "$testfile")"
+        _run_testfile_tests "$(readlink -f "$testfile")" dot_formatter
+    ) &
+    running_jobs=$((running_jobs + 1))
+done
+
+wait     # wait for the remaining jobs to finish
+
+# print_summary
+# _print_test_results
+
+rm -rf "$tsk_root_dir"

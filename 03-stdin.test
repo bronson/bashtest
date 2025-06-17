@@ -63,4 +63,4 @@ stdout_is <<EOL
 EOL
 }
 
-source "$(dirname "$0")/test-harness"
+source "$(dirname "$BASH_SOURCE")/test-harness"
