@@ -29,7 +29,7 @@
 #: somewhere.
 #:
 #: Your test can also access these directories:
-#: - testfile_dir: The directory containing the testfile.
+#: - testfile_dir: The directory containing the testfile of the test currently being run.
 #:   For example, if you
 #:   have some sample data in a file next to the testfile, you can
 #:   specify it like this: `$(testfile_dir)/sample_data.txt`
@@ -58,7 +58,7 @@
 #: source "$(dirname "$0")/../run-tests.sh"
 #: ```
 
-if [ -n "$tsk_framework_path" ]; then
+if [ -n "$tsk_framework_file" ]; then
     # test harness is already loaded, don't load again.
     return # calling exit would terminate the test currently in progress.
 fi
@@ -76,8 +76,7 @@ fi
 
 # Store the path to the run-tests.sh script for later use
 tsk_orig_cwd="$(pwd)"     # save the directory we were started in
-tsk_framework_path="$(readlink -f "${BASH_SOURCE[0]}")"
-tsk_testfile_path=""  # the testfile that we're interpreting or blank if no file
+tsk_framework_file="$(readlink -f "${BASH_SOURCE[0]}")"
 
 # tests have their output redirected to files so we need to:
 exec 3>&1 4>&2        # save stdout and stderr to FDs 3 and 4
@@ -175,7 +174,7 @@ stderr_is() {
 
 
 abort() {
-    # TODO: could run tests in a subshell that keeps testing until abort is called.
+    # TODO: could run all tests in a subshell that keeps testing until abort is called.
     # Abort exits the subshell and then the tests end normally.
     local errmsg="line $(_line_number): $1"
     printf "${CR} %02d ${RED}ABORT${NC}  $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
@@ -213,16 +212,16 @@ EOF
 # Returns the directory of the currently running testfile
 testfile_dir() {
     # TODO/TOTEST: what if the test is coming from stdin? dirname of STDIN?
-    if [ -z "$tsk_testfile_path" ]; then
-        echo "Error: No testfile detected. THIS IS A BUG. exiting now." >&4
+    if [ -z "$tsk_testfile" ]; then
+        echo "Error: testfile_dir was called without a testfile!" >&4
         exit 1
     fi
-    dirname "$tsk_testfile_path"
+    dirname "$tsk_testfile"
 }
 
 # Returns the directory of the test-harness script
 framework_dir() {
-    dirname "$tsk_framework_path"
+    dirname "$tsk_framework_file"
 }
 
 # Returns the shared cache directory that is available to all tests
@@ -428,7 +427,9 @@ _list_formatter_post() {
 }
 
 _run_testfile_tests() {
-    local formatter="$1"
+    local tsk_testfile="$1"
+    local tsk_formatter="$2"
+
     cd "$tsk_run_dir" || exit 1
 
     # Run the before:all hook if defined
@@ -448,7 +449,7 @@ _run_testfile_tests() {
 
         # in case the previous test redirected its output
         exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"
-        "_${formatter}_pre"
+        "_${tsk_formatter}_pre"
 
         if type before:each &>/dev/null; then
             before:each "$tsk_test_name"
@@ -500,7 +501,7 @@ _run_testfile_tests() {
                 fi
             fi
 
-            "_${formatter}_post" "$result"
+            "_${tsk_formatter}_post" "$result"
         fi
     done
 
@@ -531,18 +532,16 @@ _prepare_test_environment() {
 }
 
 if [ $# -eq 0 ]; then
+    _prepare_test_environment
     if [ "${BASH_SOURCE[1]}" != "" ]; then
         # the test harness is being sourced from a test file
         # (for example, executing the test directly: ./01-testfile.test)
-        tsk_testfile_path="$(readlink -f "${BASH_SOURCE[1]}")"
+        _run_testfile_tests "$(readlink -f "${BASH_SOURCE[1]}")" list_formatter
     else
         # otherwise, read the tests from stdin without a testfile
         # (often when testing test-harness itself: cat test | bash test-harness)
-        tsk_testfile_path="STDIN"
         source <(cat)
+        _run_testfile_tests "STDIN" list_formatter
     fi
-
-    _prepare_test_environment
-    _run_testfile_tests list_formatter
     _print_test_results
 fi
