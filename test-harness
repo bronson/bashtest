@@ -371,19 +371,6 @@ _print_test_results() {
     echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${assertions}${NC}" >&3
 }
 
-# creates a new directory for testing
-_find_test_directory() {
-    local dir_num=1
-    while [ -e "/tmp/tsk-test-$(printf "%02d" $dir_num)" ]; do
-        dir_num=$((dir_num + 1))
-        if [ $dir_num -gt 99 ]; then
-            echo "Too many test directories. Run: rm -r /tmp/tsk-test-*" >&4
-            exit 1
-        fi
-    done
-    echo "/tmp/tsk-test-$(printf "%02d" $dir_num)"
-}
-
 # Generates a list of test functions to run.
 _find_tests() {
     # `declare -F | cut -d" " -f3 | grep '^test:'`
@@ -547,8 +534,7 @@ _prepare_test_environment() {
     # TODO: running in /tmp isn't good for tests that require giant files
     # TODO: option to create and mount a ramdisk to run tests
 
-    tsk_root_dir="$(_find_test_directory)"
-    mkdir -p "$tsk_root_dir"
+    tsk_root_dir="$(mktemp -d "/tmp/tsk-test-XXXXXX")"
 }
 
 # run tests unless being loaded by another script
