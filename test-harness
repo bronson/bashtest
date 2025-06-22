@@ -371,17 +371,17 @@ _print_test_results() {
     echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${assertions}${NC}" >&3
 }
 
-# creates a new directory for testing inside the current working directory
+# creates a new directory for testing
 _find_test_directory() {
     local dir_num=1
-    while [ -e "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)" ]; do
+    while [ -e "/tmp/tsk-test-$(printf "%02d" $dir_num)" ]; do
         dir_num=$((dir_num + 1))
         if [ $dir_num -gt 99 ]; then
-            echo "Too many test directories. Run: rm -r tsk-test-*" >&4
+            echo "Too many test directories. Run: rm -r /tmp/tsk-test-*" >&4
             exit 1
         fi
     done
-    echo "$tsk_orig_cwd/tsk-test-$(printf "%02d" $dir_num)"
+    echo "/tmp/tsk-test-$(printf "%02d" $dir_num)"
 }
 
 # Generates a list of test functions to run.
@@ -544,8 +544,7 @@ _prepare_test_environment() {
     tsk_skip_count=0      # current number of tests skipped
     tsk_total_assertions=0 # total number of assertions made
 
-    # TODO: ensure local directory is writeable first, bounce to /tmp if not?
-    #    TODO: just bounce to /tmp always, unless you want to keep the test artifacts?
+    # TODO: running in /tmp isn't good for tests that require giant files
     # TODO: option to create and mount a ramdisk to run tests
 
     tsk_root_dir="$(_find_test_directory)"
