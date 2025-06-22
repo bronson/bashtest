@@ -251,6 +251,26 @@ pluralize() {
 #    Code to run the tests
 #
 
+_process_arguments() {
+    testfiles=()
+    max_jobs=12  # not the fastest but should be reasonably close
+
+    while (( "$#" )); do case $1 in
+        -d|--dir) DIR="$2"; shift; shift;;
+        -j|--jobs) max_jobs="$2"; shift; shift;;
+        -k|--keep) KEEP=true; shift;;
+        -n|--name|--number) NAME="$2"; shift; shift;; # TODO
+        -w|--watch) WATCH=true; shift;;               # TODO
+        *) testfiles+=("$1"); shift;;
+    esac; done
+
+    # ensure max_jobs is a positive integer
+    if [[ ! "$max_jobs" =~ ^[0-9]+$ ]]; then
+        echo "invalid max jobs: '$max_jobs'"
+        exit 1
+    fi
+}
+
 # returns the line number of the caller of the given frame
 # defaults to the caller of the function calling _line_number
 _line_number() {
@@ -537,7 +557,7 @@ _prepare_test_environment() {
     tsk_root_dir="$(mktemp -d "/tmp/tsk-test-XXXXXX")"
 }
 
-# run tests unless being loaded by another script
+# run the tests unless the harness is being loaded by another script
 if [ -z "$tsk_load_only" ]; then
     _prepare_test_environment
     if [ "${BASH_SOURCE[1]}" != "" ]; then
@@ -546,7 +566,7 @@ if [ -z "$tsk_load_only" ]; then
         _run_testfile_tests "$(readlink -f "${BASH_SOURCE[1]}")" list_formatter
     else
         # otherwise, read the tests from stdin without a testfile
-        # (often when testing test-harness itself: cat test | bash test-harness)
+        # (used when testing the test-harness itself: cat test | bash test-harness)
         source <(cat)
         _run_testfile_tests "STDIN" list_formatter
     fi

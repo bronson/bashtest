@@ -1,21 +1,22 @@
 #!/bin/bash
 
-testfiles=()
-max_jobs=12  # not the fastest but should be reasonably close
+# given a testfile, ensure we return a unique name for this test
+# even if other testfiles have the same identical name
+_get_testfile_unique_dirname() {
+    local testfile="$1"
+    local filename="${testfile##*/}"     # remove leading directories
+    filename="${filename%.test}"   # remove trailing ".test"
+    echo "$filename--$testfile_count"
+}
 
-# TODO: move argument handling into the test harness so you can pass
-# arguments when running testfiles directly?
-while (( "$#" )); do case $1 in
-    -w|--watch) WATCH=true; shift;;               # TODO
-    -n|--name|--number) NAME="$2"; shift; shift;; # TODO
-    -j|--jobs) max_jobs="$2"; shift; shift;;
-    *) testfiles+=("$1"); shift;;
-esac; done
-
-# ensure max_jobs is a positive integer
-if [[ ! "$max_jobs" =~ ^[0-9]+$ ]]; then
-    echo "invalid max jobs: '$max_jobs'"
+tsk_load_only=1 source "$(dirname "$0")/test-harness"
+if [ "$?" -ne 0 ]; then
+    echo "Couln't find the test-harness file!" >&2
+    echo "Put test-harness in the same directory as test-runner." >&2
+    exit 121
 fi
+
+_process_arguments "$@"
 
 # If no test files were specified, run all .test files recursively
 if [ ${#testfiles[@]} -eq 0 ]; then
@@ -29,24 +30,6 @@ if [ ${#testfiles[@]} -eq 0 ]; then
         exit 120
     fi
 fi
-
-
-# load the test harness once before forking subshells
-tsk_load_only=1 source "$(dirname "$0")/test-harness"
-if [ "$?" -ne 0 ]; then
-    echo "Couln't find the test-harness file!" >&2
-    echo "Put test-harness in the same directory as test-runner." >&2
-    exit 121
-fi
-
-# given a testfile, ensure we return a unique name for this test
-# even if other testfiles have the same identical name
-_get_testfile_unique_dirname() {
-    local testfile="$1"
-    local filename="${testfile##*/}"     # remove leading directories
-    filename="${filename%.test}"   # remove trailing ".test"
-    echo "$filename--$testfile_count"
-}
 
 _prepare_test_environment
 running_jobs=0   # TODO _tsk these?

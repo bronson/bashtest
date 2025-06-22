@@ -9,7 +9,8 @@ A simple way to test CLI tools and bash scripts.
 - Easy to Install
 - Bash Dialect
 - No Filesystem Shenanigans
-- Simple
-- Permissive License
+- Simple -- reasonably small, easy to understand
+- Permissive License -- no need to sweat license issues
+- Mature -- complete feature set, stable
 
 This project was extracted from [Portkey](https://github.com/bronson/portkey).
