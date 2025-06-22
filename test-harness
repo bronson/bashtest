@@ -395,6 +395,7 @@ _find_tests() {
 
 _dot_formatter_pre_test() { :; }
 
+# the dot formatter never prints a final newline so the caller must print it
 _dot_formatter_post_test() {
     case "$1" in
         pass) echo -n '.' >&3 ;;
