@@ -128,7 +128,7 @@ stderr_contains() {
     tsk_test_assertions=$((tsk_test_assertions + 1))
     tsk_stderr_checked=true
 
-    if ! grep -q "$expected_text" "$tsk_artifacts_dir/test-stderr"; then
+    if ! grep -q "$expected_text" "$tsk_root_dir/test-stderr"; then
         _add_error_with_stderr "stderr_contains line $(_line_number): stderr doesn't contain: '$expected_text'"
     fi
 }
@@ -164,11 +164,11 @@ file_is() {
 }
 
 stdout_is() {
-    file_is "$1" "$tsk_artifacts_dir/test-stdout" stdout_is "$(_line_number)"
+    file_is "$1" "$tsk_root_dir/test-stdout" stdout_is "$(_line_number)"
 }
 
 stderr_is() {
-    file_is "$1" "$tsk_artifacts_dir/test-stderr" stderr_is "$(_line_number)"
+    file_is "$1" "$tsk_root_dir/test-stderr" stderr_is "$(_line_number)"
     tsk_stderr_checked=true
 }
 
@@ -185,7 +185,7 @@ abort() {
 mock() {
     local command="$1"
     local behavior="$2"
-    local mock_dir="$tsk_artifacts_dir/test-mocks"
+    local mock_dir="$tsk_root_dir/test-mocks"
     local executable="$mock_dir/$command"
 
     # Create the mock directory and add it to PATH if needed
@@ -295,7 +295,7 @@ _add_error() {
 # same as _add_error, but includes a few lines of stderr after the message
 _add_error_with_stderr() {
     local message="$1"
-    local snippet="$(head -n 20 "$tsk_artifacts_dir/test-stderr")"
+    local snippet="$(head -n 20 "$tsk_root_dir/test-stderr")"
     message="$message"$'\n'"$(_blockquote "$snippet")"
     _add_error "$message"
 }
@@ -335,7 +335,7 @@ _expect_error() {
 # TODO: one day we might want to set up mocks once and
 # then run them in multiple tests.
 _cleanup_mocks() {
-    rm -rf "$tsk_artifacts_dir/test-mocks"/* "$tsk_artifacts_dir/test-mocks"/.*
+    rm -rf "$tsk_root_dir/test-mocks"/* "$tsk_root_dir/test-mocks"/.*
 }
 
 _check_for_abandoned_files() {
@@ -394,7 +394,7 @@ _find_tests() {
 
 
 # called before each test starts
-_list_formatter_pre() {
+_list_formatter_pre_test() {
     # only do this if we're pretty-printing to a terminal
     if [ -n "$CR" ]; then
         # no newline on this line, end_test will back up and print the result
@@ -402,8 +402,8 @@ _list_formatter_pre() {
     fi
 }
 
-# called when the test is complete
-_list_formatter_post() {
+# called after each test is complete
+_list_formatter_post_test() {
     local result
     case "$1" in
         pass) result="${GREEN}pass${NC}" ;;
@@ -430,11 +430,14 @@ _run_testfile_tests() {
     local tsk_testfile="$1"
     local tsk_formatter="$2"
 
-    cd "$tsk_run_dir" || exit 1
+    mkdir -p "$tsk_root_dir/run" "$tsk_root_dir/cache" 2>&4 || exit 1
+    cd "$tsk_root_dir/run"
 
     # Run the before:all hook if defined
     if type before:all &>/dev/null; then
         before:all
+        # TODO: before_all should be able to skip the entire testfile
+        # TODO: what if before:all fails some assertions?
     fi
 
     local tsk_test_name
@@ -448,8 +451,8 @@ _run_testfile_tests() {
         tsk_total_count=$((tsk_total_count + 1))
 
         # in case the previous test redirected its output
-        exec 1>"$tsk_artifacts_dir/test-stdout" 2>"$tsk_artifacts_dir/test-stderr"
-        "_${tsk_formatter}_pre"
+        exec 1>"$tsk_root_dir/test-stdout" 2>"$tsk_root_dir/test-stderr"
+        "_${tsk_formatter}_pre_test"
 
         if type before:each &>/dev/null; then
             before:each "$tsk_test_name"
@@ -464,7 +467,7 @@ _run_testfile_tests() {
 
         _cleanup_mocks
 
-        if [ -s "$tsk_artifacts_dir/test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
+        if [ -s "$tsk_root_dir/test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
             _add_error_with_stderr "test produced stderr:"
         fi
 
@@ -487,35 +490,36 @@ _run_testfile_tests() {
                 tsk_fail_count=$((tsk_fail_count + 1))
                 result=fail
 
+                # TODO: how do we preserve failed tests?
                 # Since the test failed, rename the run directory to preserve the state
-                local safe_name=$(echo "$tsk_test_name" | tr ' /\\:*?"<>|' '_')
-                local failed_dir="$tsk_root_dir/failed-$safe_name"
-                mv "$tsk_run_dir" "$failed_dir"
+                # local safe_name=$(echo "$tsk_test_name" | tr ' /\\:*?"<>|' '_')
+                # local failed_dir="$tsk_root_dir/failed-$safe_name"
+                # mv "$tsk_run_dir" "$failed_dir"
 
-                # Move artifacts to the failed test directory with clear names
-                mkdir -p "$failed_dir"
-                mv "$tsk_artifacts_dir/test-stdout" "$failed_dir/FAILED-stdout.txt" 2>&4
-                mv "$tsk_artifacts_dir/test-stderr" "$failed_dir/FAILED-stderr.txt" 2>&4
-                if [ -d "$tsk_artifacts_dir/test-mocks" ]; then
-                    mv "$tsk_artifacts_dir/test-mocks" "$failed_dir/FAILED-mocks" 2>&4
-                fi
+                # # Move artifacts to the failed test directory with clear names
+                # mkdir -p "$failed_dir"
+                # mv "$tsk_artifacts_dir/test-stdout" "$failed_dir/FAILED-stdout.txt" 2>&4
+                # mv "$tsk_artifacts_dir/test-stderr" "$failed_dir/FAILED-stderr.txt" 2>&4
+                # if [ -d "$tsk_artifacts_dir/test-mocks" ]; then
+                #     mv "$tsk_artifacts_dir/test-mocks" "$failed_dir/FAILED-mocks" 2>&4
+                # fi
             fi
 
-            "_${tsk_formatter}_post" "$result"
+            "_${tsk_formatter}_post_test" "$result"
         fi
     done
 
     if type after:all &>/dev/null; then
         after:all
+        # TODO: what if after:all fails some assertions?
     fi
 }
 
+# creates and cd's into a suitable directory for testing
 # call once before running any tests
 _prepare_test_environment() {
     # todo: any way to turn these into locals?
     tsk_root_dir=""       # main test directory
-    tsk_run_dir=""        # directory where each test is run
-    tsk_artifacts_dir=""  # directory for temporary test artifacts
 
     tsk_total_count=0     # current number of tests run
     tsk_pass_count=0      # current number of tests passed
@@ -523,12 +527,12 @@ _prepare_test_environment() {
     tsk_skip_count=0      # current number of tests skipped
     tsk_total_assertions=0 # total number of assertions made
 
-    # TODO: ensure local directory is writeable first, bounce to /tmp if not
+    # TODO: ensure local directory is writeable first, bounce to /tmp if not?
+    #    TODO: just bounce to /tmp always, unless you want to keep the test artifacts?
     # TODO: option to create and mount a ramdisk to run tests
+
     tsk_root_dir="$(_find_test_directory)"
-    tsk_run_dir="$tsk_root_dir/run"
-    tsk_artifacts_dir="$tsk_root_dir/artifacts"
-    mkdir -p "$tsk_run_dir" "$tsk_artifacts_dir" "$tsk_root_dir/cache" 2>&4 || exit 1
+    mkdir -p "$tsk_root_dir"
 }
 
 if [ $# -eq 0 ]; then
