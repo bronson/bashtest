@@ -49,4 +49,4 @@ before each test:02-before_each_fired_again
 EOL
 }
 
-source "$(dirname "$BASH_SOURCE")/test-harness"
+source "$(dirname "$BASH_SOURCE")/run-tests"

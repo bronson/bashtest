@@ -106,4 +106,4 @@ test:mock_works()
     is_eq "mock command executed" "$(testcmd)"
 }
 
-source "$(dirname "$BASH_SOURCE")/test-harness"
+source "$(dirname "$BASH_SOURCE")/run-tests"

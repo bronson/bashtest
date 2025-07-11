@@ -55,7 +55,7 @@ EOL
 test:run_source_line_from_stdin() {
     bash $tsk_framework_file - <<EOL
         test:run_test() { is_eq 1 1; }
-        source "$(framework_dir)/test-harness"
+        source "$(framework_dir)/run-tests"
 EOL
 stdout_is <<EOL
  01 pass   test:run_test
@@ -63,4 +63,4 @@ stdout_is <<EOL
 EOL
 }
 
-source "$(dirname "$BASH_SOURCE")/test-harness"
+source "$(dirname "$BASH_SOURCE")/run-tests"

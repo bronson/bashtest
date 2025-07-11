@@ -224,7 +224,7 @@ testfile_dir() {
     dirname "$tsk_testfile"
 }
 
-# Returns the directory of the test-harness script
+# Returns the directory of the run-tests script
 framework_dir() {
     dirname "$tsk_framework_file"
 }
@@ -639,9 +639,8 @@ _run_multiple_testfiles() {
 }
 
 # there are many ways to run the tests:
-# - Run multiple test files: ./test-harness file1.test file2.test
-# - Run tests from stdin: cat test | ./test-harness
-#     TODO: should that be `cat test | ./test-harness -`?
+# - Run multiple test files: ./run-tests file1.test file2.test
+# - Run tests from stdin: cat test | ./run-tests -
 # - Run a single test file: ./01-my-tests.test
 # - You should also be able to run multiple tests: ./01-a.test 02-b.test
 # - if you name a directory, all tests in that directory will be run.

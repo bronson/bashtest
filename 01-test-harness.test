@@ -66,7 +66,7 @@ test:framework_dir_works()
     local dir=$(framework_dir)
     [ -d "$dir" ]                 # directory exists
     is_eq 0 $?
-    [ -f "$dir/test-harness" ]    # and contains the harness
+    [ -f "$dir/run-tests" ]    # and contains the harness
     is_eq 0 $?
 }
 
@@ -103,4 +103,4 @@ test:cache_dir_works()
 #     rm "temp_file.txt"
 # }
 
-source "$(dirname "$BASH_SOURCE")/test-harness"
+source "$(dirname "$BASH_SOURCE")/run-tests"
