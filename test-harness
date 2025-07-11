@@ -78,8 +78,14 @@ fi
 tsk_orig_cwd="$(pwd)"     # save the directory we were started in
 tsk_framework_file="$(readlink -f "${BASH_SOURCE[0]}")"
 
+# if the user ran a testfile directly (`./01.test`), tsk_launched_file will be that file
+tsk_launched_file=""
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then
+    tsk_launched_file="${BASH_SOURCE[1]}"
+fi
+
 # tests have their output redirected to files so we need to:
-exec 3>&1 4>&2        # save stdout and stderr to FDs 3 and 4
+exec 3>&1 4>&2 # save stdout and stderr to FDs 3 and 4
 
 # TODO: this is a misnomer... we also use tsk_use_color to indicate
 # if we should use control codes to do curses-style terminal output
@@ -172,7 +178,6 @@ stderr_is() {
     tsk_stderr_checked=true
 }
 
-
 abort() {
     # TODO: could run all tests in a subshell that keeps testing until abort is called.
     # Abort exits the subshell and then the tests end normally.
@@ -230,8 +235,14 @@ cache_dir() {
 }
 
 # call this to make differences be displayed using `diff` rather than side-by-side
+# TODO: this needs to be improved!
 want_diff() {
     tsk_test_want_format="diff"
+}
+
+# call this when writing tests to dump its arguments immediately to the screen
+debug() {
+    echo "$@" >&3
 }
 
 pluralize() {
@@ -248,26 +259,51 @@ pluralize() {
 
 
 #
-#    Code to run the tests
+#    Internal code to run the tests
 #
+
+_add_testfile() {
+    # TODO: ensure the user can only specify stdin once?
+    testfiles+=("$1")
+}
 
 _process_arguments() {
     testfiles=()
     max_jobs=12  # not the fastest but should be reasonably close
 
+    # If the test harness is being sourced from a testfile, add the testfile.
+    if [ -n "$tsk_launched_file" ]; then
+        testfiles+=("$tsk_launched_file")
+    fi
+
+    # TODO: if a directory is specified, add all .test files in that directory
+    # TODO: should we care about whether a testfile argument ends in '.test'?
     while (( "$#" )); do case $1 in
         -d|--dir) DIR="$2"; shift; shift;;
         -j|--jobs) max_jobs="$2"; shift; shift;;
         -k|--keep) KEEP=true; shift;;
         -n|--name|--number) NAME="$2"; shift; shift;; # TODO
         -w|--watch) WATCH=true; shift;;               # TODO
-        *) testfiles+=("$1"); shift;;
+        *) _add_testfile "$1"; shift;;
     esac; done
 
     # ensure max_jobs is a positive integer
     if [[ ! "$max_jobs" =~ ^[0-9]+$ ]]; then
         echo "invalid max jobs: '$max_jobs'"
         exit 1
+    fi
+
+    # If no test files were specified, run all .test files recursively
+    if [ ${#testfiles[@]} -eq 0 ]; then
+        while IFS= read -r file; do
+            testfiles+=("$file")
+        done < <(find . -type f -name "*.test")
+
+        if [ ${#testfiles[@]} -eq 0 ]; then
+            echo "No testfiles found"
+            echo "Testfile names must end in '.test'"
+            exit 120
+        fi
     fi
 }
 
@@ -449,6 +485,13 @@ _run_testfile_tests() {
     local tsk_testfile="$1"
     local tsk_formatter="$2"
 
+    if [ "$tsk_testfile" = '-' ]; then
+        source <(cat) # load the testfile from stdin
+    else
+        # convert the testfile to an absolute path
+        tsk_testfile="$(readlink -f "$tsk_testfile")"
+    fi
+
     mkdir -p "$tsk_root_dir/run" "$tsk_root_dir/cache" 2>&4 || exit 1
     cd "$tsk_root_dir/run"
 
@@ -557,18 +600,60 @@ _prepare_test_environment() {
     tsk_root_dir="$(mktemp -d "/tmp/tsk-test-XXXXXX")"
 }
 
-# run the tests unless the harness is being loaded by another script
-if [ -z "$tsk_load_only" ]; then
-    _prepare_test_environment
-    if [ "${BASH_SOURCE[1]}" != "" ]; then
-        # the test harness is being sourced from a test file
-        # (for example, executing the test directly: ./01-testfile.test)
-        _run_testfile_tests "$(readlink -f "${BASH_SOURCE[1]}")" list_formatter
-    else
-        # otherwise, read the tests from stdin without a testfile
-        # (used when testing the test-harness itself: cat test | bash test-harness)
-        source <(cat)
-        _run_testfile_tests "STDIN" list_formatter
-    fi
+# given a testfile, ensure we return a unique name for this test
+# even if other testfiles have the same identical name
+_get_testfile_unique_dirname() {
+    local testfile="$1"
+    local filename="${testfile##*/}"     # remove leading directories
+    filename="${filename%.test}"   # remove trailing ".test"
+    echo "$filename--$testfile_count"
+}
+
+_run_multiple_testfiles() {
+    running_jobs=0   # TODO _tsk these?
+    testfile_count=0
+
+    tsk_formatter=list_formatter
+
+    for testfile in "${testfiles[@]}"; do
+        testfile_count=$((testfile_count + 1))
+        if [ "$running_jobs" -ge "$max_jobs" ]; then
+            wait -n
+            running_jobs=$((running_jobs - 1))
+        fi
+
+        (
+            if [ "$testfile" != "-" ]; then
+                source "$testfile"   # '-' means stdin
+            fi
+            tsk_root_dir="$tsk_root_dir/$(_get_testfile_unique_dirname "$testfile")"
+            _run_testfile_tests "$testfile" dot_formatter
+        ) &
+        running_jobs=$((running_jobs + 1))
+    done
+
+    wait  # wait for the remaining jobs to finish
+    echo  # the dot formatter never prints a final newline so the caller must print it
+
+    rm -rf "$tsk_root_dir"
+}
+
+# there are many ways to run the tests:
+# - Run multiple test files: ./test-harness file1.test file2.test
+# - Run tests from stdin: cat test | ./test-harness
+#     TODO: should that be `cat test | ./test-harness -`?
+# - Run a single test file: ./01-my-tests.test
+# - You should also be able to run multiple tests: ./01-a.test 02-b.test
+# - if you name a directory, all tests in that directory will be run.
+# - if you don't name any directories or files, the cwd will be searched for tests.
+
+_prepare_test_environment
+_process_arguments "$@"
+# if the user supplies a single testfile, we show a more verbose output than if they're running multiple
+if [ ${#testfiles[@]} -eq 1 ]; then
+    _run_testfile_tests "${testfiles[0]}" list_formatter
     _print_test_results
+else
+    # TODO: need to print failures and results when running multiple test files
+    _run_multiple_testfiles
 fi

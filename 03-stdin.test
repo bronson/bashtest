@@ -11,7 +11,7 @@ test:run_passing_test_from_stdin() {
         abort "Framework not found at '$tsk_framework_file'"
     fi
 
-    bash $tsk_framework_file <<EOL
+    bash $tsk_framework_file - <<EOL
         test:run_test() { is_eq 1 1; }
 EOL
     stdout_is <<EOL
@@ -21,7 +21,7 @@ EOL
 }
 
 test:run_failing_test_from_stdin() {
-    bash $tsk_framework_file <<EOL
+    bash $tsk_framework_file - <<EOL
         test:run_test() { is_eq 1 2; }
 EOL
     stdout_is <<EOL
@@ -36,7 +36,7 @@ EOL
 # and complex stuff later, the first failures should be more understandable.
 # This is NOT so tests can depend on each other!
 test:run_tests_in_order() {
-    bash $tsk_framework_file <<-EOL
+    bash $tsk_framework_file - <<-EOL
         test:one() { is_eq 1 1; }
         test:two() { is_eq 2 2; }
         test:three() { is_eq 3 3; }
@@ -53,7 +53,7 @@ EOL
 }
 
 test:run_source_line_from_stdin() {
-    bash $tsk_framework_file <<EOL
+    bash $tsk_framework_file - <<EOL
         test:run_test() { is_eq 1 1; }
         source "$(framework_dir)/test-harness"
 EOL
