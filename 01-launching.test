@@ -1,0 +1,60 @@
+#!/bin/bash
+
+# These tests verify the various ways to launch tests.
+# Other command-line arguments are tested elsewhere.
+
+before:all() {
+    # this is a little more readable
+    run_tests="$tsk_framework_file"
+}
+
+before:each() {
+    cd "$(framework_dir)/fixtures/numbered"
+}
+
+test:execute_one_testfile() {
+    $run_tests one.test
+    stdout_is <<EOF
+ 01 pass   test:one
+1 test: 1 passed, 0 failed.   1 assertion.
+EOF
+}
+
+skip:execute_multiple_testfiles() {
+    $run_tests one.test two.test three.test
+}
+
+skip:launch_one_testfile() {
+    ./one.test
+}
+
+skip:launch_multiple_testfiles() {
+    ./one.test two.test three.test
+}
+
+skip:launch_one_dir() {
+    cd ..
+    $run_tests numbered
+}
+
+skip:execute_testfiles_and_dirs() {
+    ./one.test ../letters two.test
+}
+
+skip:launch_multiple_dirs() {
+    run-tests letters numbers
+}
+
+skip:execute_stdio() {
+    bash $tsk_framework_file - <<EOL
+        test:run_test() { is_eq 1 1; }
+EOL
+}
+
+skip:execute_stdio_multiple() {
+    bash $tsk_framework_file one.test - <<EOL
+        test:run_test() { is_eq 1 1; }
+EOL
+}
+
+source "$(dirname "$BASH_SOURCE")/run-tests"

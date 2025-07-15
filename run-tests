@@ -262,9 +262,17 @@ pluralize() {
 #    Internal code to run the tests
 #
 
-_add_testfile() {
+# accepts testfiles and directories
+_add_argument() {
     # TODO: ensure the user can only specify stdin once?
-    testfiles+=("$1")
+    if [ -d "$1" ]; then
+        # search the given directory for '.test' files
+        while IFS= read -r file; do
+            testfiles+=("$file")
+        done < <(find "$1" -type f -name "*.test")
+    else
+        testfiles+=("$1")
+    fi
 }
 
 _process_arguments() {
@@ -284,7 +292,7 @@ _process_arguments() {
         -k|--keep) KEEP=true; shift;;
         -n|--name|--number) NAME="$2"; shift; shift;; # TODO
         -w|--watch) WATCH=true; shift;;               # TODO
-        *) _add_testfile "$1"; shift;;
+        *) _add_argument "$1"; shift;;
     esac; done
 
     # ensure max_jobs is a positive integer
@@ -295,15 +303,12 @@ _process_arguments() {
 
     # If no test files were specified, run all .test files recursively
     if [ ${#testfiles[@]} -eq 0 ]; then
-        while IFS= read -r file; do
-            testfiles+=("$file")
-        done < <(find . -type f -name "*.test")
+        _add_argument '.'
+    fi
 
-        if [ ${#testfiles[@]} -eq 0 ]; then
-            echo "No testfiles found"
-            echo "Testfile names must end in '.test'"
-            exit 120
-        fi
+    if [ ${#testfiles[@]} -eq 0 ]; then
+        echo "No testfiles found. Testfile names must end in '.test'."
+        exit 120
     fi
 }
 

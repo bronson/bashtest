@@ -1,0 +1,7 @@
+#!/bin/bash
+
+test:one() {
+    is_eq 1 1
+}
+
+source "$(dirname "$BASH_SOURCE")/../../run-tests"
