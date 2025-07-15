@@ -490,6 +490,7 @@ _run_testfile_tests() {
     else
         # convert the testfile to an absolute path
         tsk_testfile="$(readlink -f "$tsk_testfile")"
+        source "$tsk_testfile"
     fi
 
     mkdir -p "$tsk_root_dir/run" "$tsk_root_dir/cache" 2>&4 || exit 1
