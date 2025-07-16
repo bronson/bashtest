@@ -652,6 +652,11 @@ _run_multiple_testfiles() {
         fi
 
         (
+            # remove test functions inherited from parent shell
+            for func in $(compgen -A function test:); do
+                unset -f "$func"
+            done
+
             if [ "$testfile" != "-" ]; then
                 source "$testfile"   # '-' means stdin
             fi

@@ -12,7 +12,7 @@ before:all() {
     run_tests="$tsk_framework_file"
 }
 
-test:execute_one_testfile() {
+test:run_one_testfile() {
     cd "$(framework_dir)/fixtures/numbered"
     $run_tests one.test -f test
     stdout_is <<EOF
@@ -20,7 +20,7 @@ pass test:one
 EOF
 }
 
-test:execute_multiple_testfiles() {
+test:run_multiple_testfiles() {
     # tests and testfiles are run in indeterminate order so we need to sort the output
     cd "$(framework_dir)/fixtures/numbered"
     $run_tests one.test two.test three.test --formatter=test | sort
@@ -31,9 +31,9 @@ pass test:two
 EOF
 }
 
-test:launch_one_dir() {
+test:run_one_dir() {
     cd "$(framework_dir)/fixtures"
-    $run_tests numbered -f test| sort
+    $run_tests numbered -f test | sort
     stdout_is <<EOF
 pass test:one
 pass test:three
@@ -41,19 +41,30 @@ pass test:two
 EOF
 }
 
-skip:launch_one_testfile() {
-    ./one.test
+test:launch_one_testfile() {
+    cd "$(framework_dir)/fixtures/numbered"
+    ./one.test -f test
+    stdout_is <<EOF
+pass test:one
+EOF
 }
 
-skip:launch_multiple_testfiles() {
-    ./one.test two.test three.test
+test:launch_multiple_testfiles() {
+    cd "$(framework_dir)/fixtures/numbered"
+    ./one.test two.test three.test -f test | sort
+    stdout_is <<EOF
+pass test:one
+pass test:three
+pass test:two
+EOF
 }
 
-skip:execute_testfiles_and_dirs() {
+skip:launch_testfiles_and_dirs() {
+    cd "$(framework_dir)/fixtures/numbered"
     ./one.test ../letters two.test
 }
 
-skip:launch_multiple_dirs() {
+skip:run_multiple_dirs() {
     run-tests letters numbers
 }
 
