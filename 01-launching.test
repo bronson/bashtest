@@ -10,15 +10,11 @@
 before:all() {
     # this is a little more readable
     run_tests="$tsk_framework_file"
-    export TEST_FORMATTER=test
-}
-
-before:each() {
-    cd "$(framework_dir)/fixtures/numbered"
 }
 
 test:execute_one_testfile() {
-    $run_tests one.test
+    cd "$(framework_dir)/fixtures/numbered"
+    $run_tests one.test -f test
     stdout_is <<EOF
 pass test:one
 EOF
@@ -26,7 +22,8 @@ EOF
 
 test:execute_multiple_testfiles() {
     # tests and testfiles are run in indeterminate order so we need to sort the output
-    $run_tests one.test two.test three.test | sort
+    cd "$(framework_dir)/fixtures/numbered"
+    $run_tests one.test two.test three.test --formatter=test | sort
     stdout_is <<EOF
 pass test:one
 pass test:three
@@ -35,8 +32,8 @@ EOF
 }
 
 test:launch_one_dir() {
-    cd ..
-    $run_tests numbered | sort
+    cd "$(framework_dir)/fixtures"
+    $run_tests numbered -f test| sort
     stdout_is <<EOF
 pass test:one
 pass test:three

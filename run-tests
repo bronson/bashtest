@@ -291,15 +291,14 @@ _process_arguments() {
         testfiles+=("$tsk_launched_file")
     fi
 
-    # it's easier for tests to set the formatter once in an env var,
-    # rather than every time they call the test-runner via a cmdline arg.
-    tsk_test_formatter="$TEST_FORMATTER"
-
     # TODO: if a directory is specified, add all .test files in that directory
     # TODO: should we care about whether a testfile argument ends in '.test'?
     while (( "$#" )); do case $1 in
         -d|--dir) DIR="$2"; shift; shift;;
+        -f|--formatter) tsk_test_formatter="$2"; shift; shift;;
+        --formatter=*) tsk_test_formatter="${1#*=}"; shift;;
         -j|--jobs) max_jobs="$2"; shift; shift;;
+        --jobs=*) max_jobs="${1#*=}"; shift;;
         -k|--keep) KEEP=true; shift;;
         -n|--name|--number) NAME="$2"; shift; shift;; # TODO
         -w|--watch) WATCH=true; shift;;               # TODO
