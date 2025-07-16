@@ -105,13 +105,22 @@ pass test:two
 EOF
 }
 
-# TODO
-skip:run_missing_testfiles() {
-    ./one.test two.test three.test -f test | sort
+test:run_missing_testfiles() {
+    $run_tests no-existy.test -f test | sort
     stdout_is <<EOF
 pass test:one
 pass test:three
 pass test:two
+EOF
+}
+
+test:run_empty_directory() {
+    mkdir empty-dir
+    # TODO: need to make testing exit code and output simpler
+    $run_tests empty-dir
+    is_eq 120 $?
+    stderr_is <<EOF
+No testfiles found. Testfile names must end in '.test'.
 EOF
 }
 

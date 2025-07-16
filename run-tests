@@ -124,16 +124,17 @@ fi
 #    The API available to tests...
 #
 
-is_eq() {
-    local expected=$1
-    local actual=$2
+_compare() {
+    local op=$1 expected=$2 actual=$3
 
     tsk_test_assertions=$((tsk_test_assertions + 1))
-
-    if [ "$expected" != "$actual" ]; then
-        _add_error "line $(_line_number): is_eq expected '$expected', got '$actual'"
+    if [ ! x"$expected" "$op" x"$actual" ]; then
+       _add_error "line $(_line_number): ${FUNCNAME[1]} expected '$expected', got '$actual'"
     fi
 }
+
+is_eq() { _compare '=' "$1" "$2"; }
+is_neq() { _compare '!=' "$1" "$2"; }
 
 stderr_contains() {
     local expected_text="$1"
@@ -317,7 +318,7 @@ _process_arguments() {
     fi
 
     if [ ${#testfiles[@]} -eq 0 ]; then
-        echo "No testfiles found. Testfile names must end in '.test'."
+        echo "No testfiles found. Testfile names must end in '.test'." >&2
         exit 120
     fi
 }
