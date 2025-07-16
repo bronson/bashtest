@@ -17,6 +17,13 @@
 # otherwise the test will fail. If you want to
 # ignore stderr, you can do something like TODO: `stderr_matches .`
 #
+#: ## Output Formatters
+#:
+#: The test runner supports different output formats via the TEST_FORMATTER environment variable:
+#:
+#: - list: use only when running a single testfile, shows each test
+#: - dot: multithread-friendly, used when running multiple testfiles
+#: - test: a simple formant meant for writing tests
 
 #: ## The Test Environment
 #:
@@ -269,7 +276,7 @@ _add_argument() {
         # search the given directory for '.test' files
         while IFS= read -r file; do
             testfiles+=("$file")
-        done < <(find "$1" -type f -name "*.test")
+        done < <(find "$1" -type f -name "*.test" | sort)
     else
         testfiles+=("$1")
     fi
@@ -283,6 +290,10 @@ _process_arguments() {
     if [ -n "$tsk_launched_file" ]; then
         testfiles+=("$tsk_launched_file")
     fi
+
+    # it's easier for tests to set the formatter once in an env var,
+    # rather than every time they call the test-runner via a cmdline arg.
+    tsk_test_formatter="$TEST_FORMATTER"
 
     # TODO: if a directory is specified, add all .test files in that directory
     # TODO: should we care about whether a testfile argument ends in '.test'?
@@ -410,27 +421,6 @@ _check_for_abandoned_files() {
     fi
 }
 
-_print_test_results() {
-    local color="$GREEN"
-    if [ $tsk_fail_count -eq 0 ]; then
-        # if all tests pass, there's no need to keep the test directory
-        rm -rf "$tsk_root_dir"
-    fi
-
-    local skip_msg=""
-    if [ $tsk_skip_count -gt 0 ]; then
-        color="$YELLOW"
-        skip_msg=", ${tsk_skip_count} skipped"
-    fi
-
-    if [ $tsk_fail_count -gt 0 ]; then
-        color="$RED"
-    fi
-
-    local count="${tsk_total_count} $(pluralize "$tsk_total_count" "test")"
-    local assertions="${tsk_total_assertions} $(pluralize "$tsk_total_assertions" "assertion")."
-    echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${assertions}${NC}" >&3
-}
 
 # Generates a list of test functions to run.
 _find_tests() {
@@ -441,9 +431,25 @@ _find_tests() {
     # in the file, not in alphabetical order.
 }
 
+_print_test_messages() {
+    if [ ${#tsk_test_messages[@]} -gt 0 ]; then
+        for msg in "${tsk_test_messages[@]}"; do
+            echo "  - $msg" >&3
+        done
+    fi
+}
+
+_test_formatter_pre_test() { :; }
+
+_test_formatter_post_test() {
+    echo "$1 $tsk_test_name" >&3
+    _print_test_messages
+}
+
+_test_formatter_test_summary() { :; }
+
 _dot_formatter_pre_test() { :; }
 
-# the dot formatter never prints a final newline so the caller must print it
 _dot_formatter_post_test() {
     case "$1" in
         pass) echo -n '.' >&3 ;;
@@ -451,6 +457,10 @@ _dot_formatter_post_test() {
         fail) echo -n 'F' >&3 ;;
         *) echo -n 'E' >&3 ;;
     esac
+}
+
+_dot_formatter_test_summary() {
+    echo # _dot_formatter_post_test doesn't print a final newline so do it here
 }
 
 # called before each test starts
@@ -479,16 +489,33 @@ _list_formatter_post_test() {
     fi
 
     printf "$CR %02d $result   $tsk_test_name$errmsg\n" "$tsk_total_count" >&3
-    if [ ${#tsk_test_messages[@]} -gt 0 ]; then
-        for msg in "${tsk_test_messages[@]}"; do
-            echo "  - $msg" >&3
-        done
+    _print_test_messages
+}
+
+_list_formatter_test_summary() {
+    local color="$GREEN"
+    if [ $tsk_fail_count -eq 0 ]; then
+        # if all tests pass, there's no need to keep the test directory
+        rm -rf "$tsk_root_dir"
     fi
+
+    local skip_msg=""
+    if [ $tsk_skip_count -gt 0 ]; then
+        color="$YELLOW"
+        skip_msg=", ${tsk_skip_count} skipped"
+    fi
+
+    if [ $tsk_fail_count -gt 0 ]; then
+        color="$RED"
+    fi
+
+    local count="${tsk_total_count} $(pluralize "$tsk_total_count" "test")"
+    local assertions="${tsk_total_assertions} $(pluralize "$tsk_total_assertions" "assertion")."
+    echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${assertions}${NC}" >&3
 }
 
 _run_testfile_tests() {
     local tsk_testfile="$1"
-    local tsk_formatter="$2"
 
     if [ "$tsk_testfile" = '-' ]; then
         source <(cat) # load the testfile from stdin
@@ -519,9 +546,9 @@ _run_testfile_tests() {
         tsk_total_count=$((tsk_total_count + 1))
 
         # in case the previous test redirected its output
-        exec 1>"$tsk_root_dir/test-stdout" 2>"$tsk_root_dir/test-stderr"
-        "_${tsk_formatter}_pre_test"
+        "_${tsk_test_formatter}_formatter_pre_test"
 
+        exec 1>"$tsk_root_dir/test-stdout" 2>"$tsk_root_dir/test-stderr"
         if type before:each &>/dev/null; then
             before:each "$tsk_test_name"
         fi
@@ -529,6 +556,7 @@ _run_testfile_tests() {
         if type after:each &>/dev/null; then
             after:each "$tsk_test_name"
         fi
+        exec 1>&3 2>&4 # restore asap so test framework errors aren't swallowed
 
         # Add this test's assertions to the total
         tsk_total_assertions=$((tsk_total_assertions + tsk_test_assertions))
@@ -572,7 +600,7 @@ _run_testfile_tests() {
                 # fi
             fi
 
-            "_${tsk_formatter}_post_test" "$result"
+            "_${tsk_test_formatter}_formatter_post_test" "$result"
         fi
     done
 
@@ -619,8 +647,6 @@ _run_multiple_testfiles() {
     running_jobs=0   # TODO _tsk these?
     testfile_count=0
 
-    tsk_formatter=list_formatter
-
     for testfile in "${testfiles[@]}"; do
         testfile_count=$((testfile_count + 1))
         if [ "$running_jobs" -ge "$max_jobs" ]; then
@@ -633,13 +659,12 @@ _run_multiple_testfiles() {
                 source "$testfile"   # '-' means stdin
             fi
             tsk_root_dir="$tsk_root_dir/$(_get_testfile_unique_dirname "$testfile")"
-            _run_testfile_tests "$testfile" dot_formatter
+            _run_testfile_tests "$testfile"
         ) &
         running_jobs=$((running_jobs + 1))
     done
 
     wait  # wait for the remaining jobs to finish
-    echo  # the dot formatter never prints a final newline so the caller must print it
 
     rm -rf "$tsk_root_dir"
 }
@@ -656,9 +681,11 @@ _prepare_test_environment
 _process_arguments "$@"
 # if the user supplies a single testfile, we show a more verbose output than if they're running multiple
 if [ ${#testfiles[@]} -eq 1 ]; then
-    _run_testfile_tests "${testfiles[0]}" list_formatter
-    _print_test_results
+    tsk_test_formatter="${tsk_test_formatter:-list}"
+    _run_testfile_tests "${testfiles[0]}"
 else
     # TODO: need to print failures and results when running multiple test files
+    tsk_test_formatter="${tsk_test_formatter:-dot}"
     _run_multiple_testfiles
 fi
+_${tsk_test_formatter}_formatter_test_summary
