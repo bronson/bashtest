@@ -516,12 +516,21 @@ _list_formatter_test_summary() {
 _run_testfile_tests() {
     local tsk_testfile="$1"
 
-    if [ "$tsk_testfile" = '-' ]; then
-        source <(cat) # load the testfile from stdin
-    else
-        # convert the testfile to an absolute path
-        tsk_testfile="$(readlink -f "$tsk_testfile")"
-        source "$tsk_testfile"
+    # load the testfile if it's not already loaded
+    if [ "$tsk_testfile" != "$tsk_launched_file" ]; then
+        # remove the launched testfile's test functions
+        for func in $(compgen -A function test:); do
+            unset -f "$func"
+        done
+
+        if [ "$tsk_testfile" = "-" ]; then
+            source <(cat) # load the testfile from stdin
+        else
+            # convert to aboslute path because we'll be running the test
+            # in a different directory than the cwd
+            tsk_testfile="$(readlink -f "$tsk_testfile")"
+            source "$tsk_testfile"
+        fi
     fi
 
     mkdir -p "$tsk_root_dir/run" "$tsk_root_dir/cache" 2>&4 || exit 1
@@ -652,14 +661,6 @@ _run_multiple_testfiles() {
         fi
 
         (
-            # remove test functions inherited from parent shell
-            for func in $(compgen -A function test:); do
-                unset -f "$func"
-            done
-
-            if [ "$testfile" != "-" ]; then
-                source "$testfile"   # '-' means stdin
-            fi
             tsk_root_dir="$tsk_root_dir/$(_get_testfile_unique_dirname "$testfile")"
             _run_testfile_tests "$testfile"
         ) &
