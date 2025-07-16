@@ -360,7 +360,7 @@ _format_diff() {
 
 # todo? make line number and function name automatic?
 _add_error() {
-    tsk_test_messages+=("$1")
+    tsk_test_error_messages+=("$1")
 }
 
 # same as _add_error, but includes a few lines of stderr after the message
@@ -384,21 +384,21 @@ _expect_error() {
     tsk_test_assertions=$((tsk_test_assertions + 1))
 
     # if nothing threw an error, that's an error.
-    if [ ${#tsk_test_messages[@]} -eq 0 ]; then
+    if [ ${#tsk_test_error_messages[@]} -eq 0 ]; then
         _add_error "line $(_line_number): _expect_error - expected error message: '$expected_message', but no errors were reported"
         return
     fi
 
     # Get the most recent error message
-    local last_idx=$((${#tsk_test_messages[@]} - 1))
-    local last_message="$(_normalize_line_numbers "${tsk_test_messages[last_idx]}")"
+    local last_idx=$((${#tsk_test_error_messages[@]} - 1))
+    local last_message="$(_normalize_line_numbers "${tsk_test_error_messages[last_idx]}")"
 
     if [ "$expected_message" = "$last_message" ]; then
         # the error was expected so it gets cleared
-        unset "tsk_test_messages[last_idx]"
+        unset "tsk_test_error_messages[last_idx]"
     else
         # the error we expected was not the error we got
-        tsk_test_messages[last_idx]="line $(_line_number): _expect_error $(_format_diff "$expected_message" "$last_message")"
+        tsk_test_error_messages[last_idx]="line $(_line_number): _expect_error $(_format_diff "$expected_message" "$last_message")"
     fi
 }
 
@@ -430,9 +430,9 @@ _find_tests() {
     # in the file, not in alphabetical order.
 }
 
-_print_test_messages() {
-    if [ ${#tsk_test_messages[@]} -gt 0 ]; then
-        for msg in "${tsk_test_messages[@]}"; do
+_print_test_error_messages() {
+    if [ ${#tsk_test_error_messages[@]} -gt 0 ]; then
+        for msg in "${tsk_test_error_messages[@]}"; do
             echo "  - $msg" >&3
         done
     fi
@@ -442,7 +442,7 @@ _test_formatter_pre_test() { :; }
 
 _test_formatter_post_test() {
     echo "$1 $tsk_test_name" >&3
-    _print_test_messages
+    _print_test_error_messages
 }
 
 _test_formatter_test_summary() { :; }
@@ -482,13 +482,13 @@ _list_formatter_post_test() {
     esac
 
     local errmsg=''
-    local num_fails="${#tsk_test_messages[@]}"
+    local num_fails="${#tsk_test_error_messages[@]}"
     if [ "$num_fails" -gt 0 ]; then
         errmsg=" ($num_fails $(pluralize "$num_fails" "error"))"
     fi
 
     printf "$CR %02d $result   $tsk_test_name$errmsg\n" "$tsk_total_count" >&3
-    _print_test_messages
+    _print_test_error_messages
 }
 
 _list_formatter_test_summary() {
@@ -537,7 +537,7 @@ _run_testfile_tests() {
     local tsk_test_name
     for tsk_test_name in $(_find_tests); do
         # these variables are used when the test is run
-        local tsk_test_messages=()
+        local tsk_test_error_messages=()
         local tsk_test_assertions=0
         local tsk_stderr_checked=false
         local tsk_test_want_format="" # TODO: this sucks.
@@ -574,7 +574,7 @@ _run_testfile_tests() {
             # Test made no assertions so call it skipped
             tsk_skip_count=$((tsk_skip_count + 1))
             result=skip
-        elif [ ${#tsk_test_messages[@]} -eq 0 ]; then
+        elif [ ${#tsk_test_error_messages[@]} -eq 0 ]; then
             # Test passed (made assertions and no errors)
             tsk_pass_count=$((tsk_pass_count + 1))
             result=pass
