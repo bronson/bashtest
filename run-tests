@@ -570,37 +570,35 @@ _run_testfile_tests() {
         # _check_for_abandoned_files
 
         local result
-        if [ "$tsk_total_count" -gt 0 ]; then
-            if [ $tsk_test_assertions -eq 0 ]; then
-                # Test made no assertions so call it skipped
-                tsk_skip_count=$((tsk_skip_count + 1))
-                result=skip
-            elif [ ${#tsk_test_messages[@]} -eq 0 ]; then
-                # Test passed (made assertions and no errors)
-                tsk_pass_count=$((tsk_pass_count + 1))
-                result=pass
-            else
-                # test had one or more failing assertions
-                tsk_fail_count=$((tsk_fail_count + 1))
-                result=fail
+        if [ $tsk_test_assertions -eq 0 ]; then
+            # Test made no assertions so call it skipped
+            tsk_skip_count=$((tsk_skip_count + 1))
+            result=skip
+        elif [ ${#tsk_test_messages[@]} -eq 0 ]; then
+            # Test passed (made assertions and no errors)
+            tsk_pass_count=$((tsk_pass_count + 1))
+            result=pass
+        else
+            # test had one or more failing assertions
+            tsk_fail_count=$((tsk_fail_count + 1))
+            result=fail
 
-                # TODO: how do we preserve failed tests?
-                # Since the test failed, rename the run directory to preserve the state
-                # local safe_name=$(echo "$tsk_test_name" | tr ' /\\:*?"<>|' '_')
-                # local failed_dir="$tsk_root_dir/failed-$safe_name"
-                # mv "$tsk_run_dir" "$failed_dir"
+            # TODO: how do we preserve failed tests?
+            # Since the test failed, rename the run directory to preserve the state
+            # local safe_name=$(echo "$tsk_test_name" | tr ' /\\:*?"<>|' '_')
+            # local failed_dir="$tsk_root_dir/failed-$safe_name"
+            # mv "$tsk_run_dir" "$failed_dir"
 
-                # # Move artifacts to the failed test directory with clear names
-                # mkdir -p "$failed_dir"
-                # mv "$tsk_artifacts_dir/test-stdout" "$failed_dir/FAILED-stdout.txt" 2>&4
-                # mv "$tsk_artifacts_dir/test-stderr" "$failed_dir/FAILED-stderr.txt" 2>&4
-                # if [ -d "$tsk_artifacts_dir/test-mocks" ]; then
-                #     mv "$tsk_artifacts_dir/test-mocks" "$failed_dir/FAILED-mocks" 2>&4
-                # fi
-            fi
-
-            "_${tsk_test_formatter}_formatter_post_test" "$result"
+            # # Move artifacts to the failed test directory with clear names
+            # mkdir -p "$failed_dir"
+            # mv "$tsk_artifacts_dir/test-stdout" "$failed_dir/FAILED-stdout.txt" 2>&4
+            # mv "$tsk_artifacts_dir/test-stderr" "$failed_dir/FAILED-stderr.txt" 2>&4
+            # if [ -d "$tsk_artifacts_dir/test-mocks" ]; then
+            #     mv "$tsk_artifacts_dir/test-mocks" "$failed_dir/FAILED-mocks" 2>&4
+            # fi
         fi
+
+        "_${tsk_test_formatter}_formatter_post_test" "$result"
     done
 
     if type after:all &>/dev/null; then
