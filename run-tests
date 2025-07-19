@@ -129,13 +129,14 @@ _compare() {
 
     tsk_test_assertions=$((tsk_test_assertions + 1))
     if [ ! x"$expected" "$op" x"$actual" ]; then
-       _add_error "line $(_line_number): ${FUNCNAME[1]} expected '$expected', got '$actual'"
+       _add_error "line $(_line_number 2): ${FUNCNAME[1]} expected '$expected', got '$actual'"
     fi
 }
 
 is_eq() { _compare '=' "$1" "$2"; }
 is_neq() { _compare '!=' "$1" "$2"; }
 
+# TODO: file_contains? stdout_contains?
 stderr_contains() {
     local expected_text="$1"
 
@@ -150,6 +151,7 @@ stderr_contains() {
 pause() {
     # TODO: make sure other tests aren't running simultaneously
     # TODO: export relevant variables and (export -f) functions
+    # TODO: if the interactive shell exits with an error, stop testing.
 
     local prompt_msg="${1:-Test paused. Type 'exit' to continue.}"
 

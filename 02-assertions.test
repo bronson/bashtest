@@ -88,6 +88,30 @@ test:stderr_contains() {
     stderr_contains "testing"
 }
 
+# make sure errors show the correct line numbers
+test:line_numbers() {
+    echo "test:test() {" > test.test
+    yes $'\n' | head -n 1024 >> test.test
+    echo "    is_eq 1 2" >> test.test
+    echo "    file_is \"gotta\"" >> test.test
+    echo "    stdout_is \"attempt\"" >> test.test
+    echo "    stderr_is \"some\"" >> test.test
+    echo "    stderr_contains \"testing\"" >> test.test
+    echo "}" >> test.test
+
+    run_tests="$tsk_framework_file"
+    $run_tests test.test -f test
+    stdout_is <<EOF
+fail test:test
+  - line 1026: is_eq expected '1', got '2'
+  - line 1027: file_is couldn't open ''
+  - line 1028: stdout_is expected 'attempt', got ''
+  - line 1029: stderr_is expected 'some', got ''
+  - stderr_contains line 1030: stderr doesn't contain: 'testing'
+EOF
+}
+
+
 # TODO: test failing tests elsewhere
 # This test makes an assertion but fails
 # test:failing_test() {
