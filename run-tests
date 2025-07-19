@@ -147,11 +147,29 @@ stderr_contains() {
     fi
 }
 
+pause() {
+    # TODO: make sure other tests aren't running simultaneously
+    # TODO: export relevant variables and (export -f) functions
+
+    local prompt_msg="${1:-Test paused. Type 'exit' to continue.}"
+
+    exec 5>&1 6>&2  # save the current test's stdout/stderr
+    exec 1>&3 2>&4  # Restore original stdout/stderr for interactive use
+
+    printf "\n\n\n=== PAUSED $tsk_test_name at line $(_line_number) ===\n"
+    printf "$prompt_msg\n\n"
+    PS1="[PAUSED] \w $ " bash --norc -i
+    printf "=== RESUMING TEST ===\n\n"
+
+    exec 1>&5 2>&6
+}
+
 # One trailing newline, if present, is trimmed from stdout before comparison.
 # If you need to be pedantically correct about the presence of the final
 # newline, you'll have to check for it outside of this function.
 # TODO: this is not great.
 file_is() {
+    # TODO: this should be a utility function, then file_is calls it, matching stdout_is etc
     local expected_text="$1"
     local file_path="$2"
     local call_name="${3:-file_is}"

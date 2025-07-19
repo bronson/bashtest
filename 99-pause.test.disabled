@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# TODO: how do we test the pause functionality?
+
+skip:pause_demo() {
+    local myvar="Hello from test"
+    echo "Before pause"
+
+    # This will pause the test and let you explore
+    pause "You can now inspect variables and the test environment"
+
+    echo "After pause"
+    is_eq 1 1
+}
+
+test:pause_with_files() {
+    echo "test content" > test-file.txt
+    local test_data="some data"
+
+    pause "Check out test-file.txt and \$test_data"
+
+    # Verify file still exists after pause
+    file_is "test content" test-file.txt
+}
+
+source "$(dirname "$BASH_SOURCE")/run-tests"

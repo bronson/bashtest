@@ -1,0 +1,119 @@
+How can I test the pause function?
+
+---
+
+ensure tests are started in the run directory
+and that if a previous test cd'd, the next test still starts in the rundir.
+
+---
+
+mocking in before:all will apply to every test
+
+---
+
+BENCHMARK
+does it make sense to reset stdout/stderr and then set it again immediately?
+would it save any time to remove the exec 1>&3 2>&4 reset?
+
+BENCHMARK
+Can we run each test in its own subshell?
+It would totally fix tests accidentally sharing variables with each other.
+
+---
+
+Skipping tests...
+
+skip: instead of test: to skip tests?  Downside is that all the skips
+will be out of order. But that's fine.
+
+or add a 'skip' call? Or just return to skip?   return # skip
+
+or both? What's the best way to skip?
+
+---
+
+Allow mocking in before:all
+
+---
+
+does it make sense to have expect_error? Should probably just run
+the test in a sub-run-tests and expect the result.
+ANSWER: I think no, it doesn't make sense.
+
+---
+
+run all tests under -e by default?
+
+---
+
+        # TODO: how do we preserve failed tests?
+        # Since the test failed, rename the run directory to preserve the state
+        # local safe_name=$(echo "$tsk_test_name" | tr ' /\\:*?"<>|' '_')
+        # local failed_dir="$tsk_root_dir/failed-$safe_name"
+        # mv "$tsk_run_dir" "$failed_dir"
+
+        # # Move artifacts to the failed test directory with clear names
+        # mkdir -p "$failed_dir"
+        # mv "$tsk_artifacts_dir/test-stdout" "$failed_dir/FAILED-stdout.txt" 2>&4
+        # mv "$tsk_artifacts_dir/test-stderr" "$failed_dir/FAILED-stderr.txt" 2>&4
+        # if [ -d "$tsk_artifacts_dir/test-mocks" ]; then
+        #     mv "$tsk_artifacts_dir/test-mocks" "$failed_dir/FAILED-mocks" 2>&4
+        # fi
+
+---
+
+# TODO: tsk_testfile_path implies it's the path to the file, not the file itself.
+
+---
+
+Run shellcheck
+
+TODO: ensure tests emitting stderr is an error
+TODO: ensure tests leaving files or directories in the test dir is an error
+TODO: ensure tests leaving functions or variables behind is an error
+
+---
+
+Should run all tests in parallel, even inside a single test file. Creating
+and destorying directories is so fast, there's no point to doing things
+serially.
+
+---
+
+ensure the test directory is chmod 700 so attackers can't access in-progress tests
+
+---
+
+What about the brief amount of time when the computer is starting up where the service might be exposed but not protected by iptables yet?
+
+We need to be 100% sure we sequence the startup so there's no chance of accessing the live service without iptables over it. There's the chance an attacker might open a connection in that tiny sliver of time.  (even if they do, the connection will just stall when the portkey protections go into place, right? So, short of an APT situation where they can control your power and restart your computer over and over until they find their way in, it's not THAT big a deal?)
+
+
+---
+
+We can't run each test in a subshell because that makes tests run 1000 times slower.
+
+It takes even longer to give each test its own test directory
+than it does to run each test in its own subshell. We definitely
+should reuse test directories the way we do now.
+
+---
+
+We need to have an option to run tests in random order to ensure order dependency
+isn't a thing..
+We should also make an option to force each test into its own subshell to verify
+that tests aren't relying on other tests.
+
+
+---------
+
+
+Testing:
+
+Should probably only preserve test results when running a single file or
+a single test. If running all tests, don't pollute the directory.
+Hope the test harness printed enough to solve the issue anyway.
+
+
+
+Add before:each, before:all, after:each, after:all
