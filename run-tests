@@ -273,6 +273,12 @@ debug() {
     echo "$@" >&3
 }
 
+# Called in a pre-hook or during the test, causes this test to be skipped.
+# Note that it can't actually exit the test so `skip; return` is a useful idiom.
+skip() {
+    tsk_skip_test=true
+}
+
 pluralize() {
     local count=$1
     local singular=$2
@@ -294,10 +300,9 @@ pluralize() {
 _add_argument() {
     # TODO: ensure the user can only specify stdin once?
     if [ -d "$1" ]; then
-        # search the given directory for '.test' files
         while IFS= read -r file; do
             testfiles+=("$file")
-        done < <(find "$1" -type f -name "*.test" | sort)
+        done < <(find "$1" -type f \( -name "*.test" -o -name "*.skip" \) | sort)
     else
         testfiles+=("$1")
     fi
@@ -532,10 +537,14 @@ _list_formatter_test_summary() {
 }
 
 _run_test() {
+    [ -n "$tsk_skip_test" ] && return
     exec 1>"$tsk_root_dir/test-stdout" 2>"$tsk_root_dir/test-stderr"
+
     if type before:each &>/dev/null; then
         before:each "$tsk_test_name"
     fi
+    [ -n "$tsk_skip_test" ] && return
+
     "$tsk_test_name" "$tsk_test_name"   # TODO: useful arguments?
     if type after:each &>/dev/null; then
         after:each "$tsk_test_name"
@@ -574,6 +583,11 @@ _compute_test_result() {
 _run_testfile_tests() {
     local tsk_testfile="$1"
 
+    tsk_skip_all_tests=""
+    if [[ "$tsk_testfile" == *.skip ]]; then
+        tsk_skip_all_tests=true
+    fi
+
     local tsk_test_want_format="" # TODO: this sucks.
 
     # load the testfile if it's not already loaded
@@ -597,10 +611,14 @@ _run_testfile_tests() {
     cd "$tsk_root_dir/run"
 
     # Run the before:all hook if defined
-    if type before:all &>/dev/null; then
-        before:all
-        # TODO: before_all should be able to skip the entire testfile
+    if [ -z $tsk_skip_all_tests ] && type before:all &>/dev/null; then
+        # TODO: where should stdout/stderr go for before/after:all?
         # TODO: what if before:all fails some assertions?
+        before:all
+        # If skip was called in before:all, skip all tests in this file
+        if [ -n "$tsk_skip_test" ]; then
+            tsk_skip_all_tests=true
+        fi
     fi
 
     local tsk_test_name
@@ -610,6 +628,7 @@ _run_testfile_tests() {
         tsk_test_error_messages=()
         tsk_stderr_checked=false
         tsk_test_result=""
+        tsk_skip_test="$tsk_skip_all_tests"
 
         tsk_total_count=$((tsk_total_count + 1))
         "_${tsk_test_formatter}_formatter_pre_test"
@@ -620,9 +639,10 @@ _run_testfile_tests() {
         "_${tsk_test_formatter}_formatter_post_test" "$tsk_test_result"
     done
 
-    if type after:all &>/dev/null; then
-        after:all
+    if [ -z $tsk_skip_all_tests ] && type after:all &>/dev/null; then
+        # TODO: where should stdout/stderr go for before/after:all?
         # TODO: what if after:all fails some assertions?
+        after:all
     fi
 }
 

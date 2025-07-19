@@ -2,12 +2,7 @@
 
 # This file tries to exercise the assertions
 
-# TODO: test skipping
-# test:no_assertions() {
-#     echo "This test has no assertions"
-# }
-
-# make sure expected_error works before using to test the assertions
+# make sure expected_error works before using it to test the assertions
 test:expected_error() {
     is_eq "apple" "orange"
     _expect_error "line nnn: is_eq expected 'apple', got 'orange'"

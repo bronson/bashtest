@@ -43,10 +43,82 @@ test:skip_functions() {
 EOF
 }
 
-skip:skip_file() {
-    touch skip-me.skip
-    $run_tests | sort
+# ensure we skip all tests in a file named *.skip
+test:skip_file() {
+    create_skip_test
+    mv skip.test test.skip
+    $run_tests -f test | sort
     stdout_is <<EOF
+skip skip:skipped
+skip test:no_asserts
+skip test:nop
+EOF
+}
+
+# ensure we skip files even if they're named on the command line
+test:skip_named_file() {
+    create_skip_test
+    mv skip.test miss-me.skip
+    $run_tests miss-me.skip -f test | sort
+    stdout_is <<EOF
+skip skip:skipped
+skip test:no_asserts
+skip test:nop
+EOF
+}
+
+test:skip_in_before_all() {
+    cat > skip.test <<EOF
+        # the before hook causes this test to be skipped
+        test:nop() {
+            is_eq 1 1
+    	}
+
+        before:all() {
+            skip
+        }
+
+        after:all() {
+            echo "the after:all hook needed to be skipped." >&2
+            exit 1
+        }
+EOF
+
+    $run_tests skip.test -f test | sort
+    stdout_is <<EOF
+skip test:nop
+EOF
+}
+
+test:skip_in_before_each() {
+    cat > skip.test <<EOF
+        # the before hook causes this test to be skipped
+        test:nop() {
+            is_eq 1 1
+    	}
+
+        before:each() {
+             skip
+        }
+EOF
+
+    $run_tests skip.test -f test | sort
+    stdout_is <<EOF
+skip test:nop
+EOF
+}
+
+test:skip_in_test() {
+    cat > skip.test <<EOF
+        test:not_happening() {
+            skip; return
+            is_eq 1 1
+    	}
+EOF
+
+    $run_tests skip.test -f test | sort
+    stdout_is <<EOF
+skip test:not_happening
 EOF
 }
 
