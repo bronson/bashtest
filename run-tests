@@ -427,6 +427,7 @@ _find_tests() {
     # `declare -F | cut -d" " -f3 | grep '^test:'`
     # `typeset -F` seems to be a synonym for declare F
     compgen -A function test:
+    compgen -A function skip:
     # TODO: should run the tests in the order they're declared
     # in the file, not in alphabetical order.
 }
@@ -514,8 +515,50 @@ _list_formatter_test_summary() {
     echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${assertions}${NC}" >&3
 }
 
+_run_test() {
+    exec 1>"$tsk_root_dir/test-stdout" 2>"$tsk_root_dir/test-stderr"
+    if type before:each &>/dev/null; then
+        before:each "$tsk_test_name"
+    fi
+    "$tsk_test_name" "$tsk_test_name"   # TODO: useful arguments?
+    if type after:each &>/dev/null; then
+        after:each "$tsk_test_name"
+    fi
+    exec 1>&3 2>&4 # restore asap so test framework errors aren't swallowed
+
+    # Add this test's assertions to the total
+    tsk_total_assertions=$((tsk_total_assertions + tsk_test_assertions))
+
+    _cleanup_mocks
+
+    if [ -s "$tsk_root_dir/test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
+        _add_error_with_stderr "test produced stderr:"
+    fi
+
+    # TODO
+    # _check_for_abandoned_files
+}
+
+_compute_test_result() {
+    if [ $tsk_test_assertions -eq 0 ]; then
+        # Test made no assertions so call it skipped
+        tsk_skip_count=$((tsk_skip_count + 1))
+        tsk_test_result="skip"
+    elif [ ${#tsk_test_error_messages[@]} -eq 0 ]; then
+        # Test passed (made assertions and no errors)
+        tsk_pass_count=$((tsk_pass_count + 1))
+        tsk_test_result="pass"
+    else
+        # test had one or more failing assertions
+        tsk_fail_count=$((tsk_fail_count + 1))
+        tsk_test_result="fail"
+    fi
+}
+
 _run_testfile_tests() {
     local tsk_testfile="$1"
+
+    local tsk_test_want_format="" # TODO: this sucks.
 
     # load the testfile if it's not already loaded
     if [ "$tsk_testfile" != "$tsk_launched_file" ]; then
@@ -546,69 +589,19 @@ _run_testfile_tests() {
 
     local tsk_test_name
     for tsk_test_name in $(_find_tests); do
-        # these variables are used when the test is run
-        local tsk_test_error_messages=()
-        local tsk_test_assertions=0
-        local tsk_stderr_checked=false
-        local tsk_test_want_format="" # TODO: this sucks.
+        # Reset test-specific variables for each test
+        tsk_test_assertions=0
+        tsk_test_error_messages=()
+        tsk_stderr_checked=false
+        tsk_test_result=""
 
         tsk_total_count=$((tsk_total_count + 1))
-
-        # in case the previous test redirected its output
         "_${tsk_test_formatter}_formatter_pre_test"
-
-        exec 1>"$tsk_root_dir/test-stdout" 2>"$tsk_root_dir/test-stderr"
-        if type before:each &>/dev/null; then
-            before:each "$tsk_test_name"
+        if [[ "$tsk_test_name" == test:* ]]; then
+            _run_test "$tsk_test_name"
         fi
-        "$tsk_test_name" "$tsk_test_name"   # TODO: useful arguments?
-        if type after:each &>/dev/null; then
-            after:each "$tsk_test_name"
-        fi
-        exec 1>&3 2>&4 # restore asap so test framework errors aren't swallowed
-
-        # Add this test's assertions to the total
-        tsk_total_assertions=$((tsk_total_assertions + tsk_test_assertions))
-
-        _cleanup_mocks
-
-        if [ -s "$tsk_root_dir/test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
-            _add_error_with_stderr "test produced stderr:"
-        fi
-
-        # TODO
-        # _check_for_abandoned_files
-
-        local result
-        if [ $tsk_test_assertions -eq 0 ]; then
-            # Test made no assertions so call it skipped
-            tsk_skip_count=$((tsk_skip_count + 1))
-            result=skip
-        elif [ ${#tsk_test_error_messages[@]} -eq 0 ]; then
-            # Test passed (made assertions and no errors)
-            tsk_pass_count=$((tsk_pass_count + 1))
-            result=pass
-        else
-            # test had one or more failing assertions
-            tsk_fail_count=$((tsk_fail_count + 1))
-            result=fail
-
-            # TODO: how do we preserve failed tests?
-            # Since the test failed, rename the run directory to preserve the state
-            # local safe_name=$(echo "$tsk_test_name" | tr ' /\\:*?"<>|' '_')
-            # local failed_dir="$tsk_root_dir/failed-$safe_name"
-            # mv "$tsk_run_dir" "$failed_dir"
-
-            # # Move artifacts to the failed test directory with clear names
-            # mkdir -p "$failed_dir"
-            # mv "$tsk_artifacts_dir/test-stdout" "$failed_dir/FAILED-stdout.txt" 2>&4
-            # mv "$tsk_artifacts_dir/test-stderr" "$failed_dir/FAILED-stderr.txt" 2>&4
-            # if [ -d "$tsk_artifacts_dir/test-mocks" ]; then
-            #     mv "$tsk_artifacts_dir/test-mocks" "$failed_dir/FAILED-mocks" 2>&4
-            # fi
-        fi
-
-        "_${tsk_test_formatter}_formatter_post_test" "$result"
+        _compute_test_result
+        "_${tsk_test_formatter}_formatter_post_test" "$tsk_test_result"
     done
 
     if type after:all &>/dev/null; then
@@ -626,8 +619,6 @@ _run_testfile_tests() {
 #   - test-stdout        file, the current test's stdout
 #   - test-stderr        file, the current test's stderr
 
-# creates and cds into a suitable directory for testing
-# call once before running any tests
 _prepare_test_environment() {
     tsk_total_count=0     # current number of tests run
     tsk_pass_count=0      # current number of tests passed

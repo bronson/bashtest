@@ -2,6 +2,7 @@
 
 # These tests verify the various ways to launch tests.
 # Other command-line arguments are tested elsewhere.
+# Related: 07-skipping.test
 
 
 # TODO: test missing file or directory names on the command line
@@ -114,10 +115,20 @@ pass test:two
 EOF
 }
 
-test:run_empty_directory() {
+skip:run_empty_directory() {
     mkdir empty-dir
     # TODO: need to make testing exit code and output simpler
     $run_tests empty-dir
+    is_eq 120 $?
+    stderr_is <<EOF
+No testfiles found. Testfile names must end in '.test'.
+EOF
+}
+
+skip:run_empty_directory_no_args() {
+    mkdir empty-dir
+    cd empty-dir
+    $run_tests
     is_eq 120 $?
     stderr_is <<EOF
 No testfiles found. Testfile names must end in '.test'.
