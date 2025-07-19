@@ -20,16 +20,16 @@ test:is_eq()
     is_eq "   " "   "
 
     is_eq 0 ""     # TODO: need to not depend on line #s here!
-    _expect_error "line 12: is_eq expected '0', got ''"
+    _expect_error "line nnn: is_eq expected '0', got ''"
     is_eq "10.0" 10
-    _expect_error "line 14: is_eq expected '10.0', got '10'"
+    _expect_error "line nnn: is_eq expected '10.0', got '10'"
     # TODO: I wouldn't expect variable interpolation in this function
     # is_eq '$var_no_exist' ''      # ensure no interpolation
-    # _expect_error "line 16: is_eq expected '$var_no_exist', got ''"
+    # _expect_error "line nnn: is_eq expected '$var_no_exist', got ''"
     # is_eq '' '$var_no_exist'      # in either argument
-    # _expect_error "line 18: is_eq expected '', got '$var_no_exist'"
+    # _expect_error "line nnn: is_eq expected '', got '$var_no_exist'"
     is_eq " " "  "                # test whitespace
-    _expect_error "line 21: is_eq expected ' ', got '  '"
+    _expect_error "line nnn: is_eq expected ' ', got '  '"
 }
 
 test:file_is() {

@@ -372,15 +372,10 @@ _add_error_with_stderr() {
     _add_error "$message"
 }
 
-_normalize_line_numbers() {
-    # replace "line 12" with "line nnn"
-    echo "$1" | sed -E 's/line [0-9]+:/line nnn:/g'
-}
-
 # used to test the API assertion calls: if an assertion failed,
 # but was expected, then the failure is cleared and the test passes.
 _expect_error() {
-    local expected_message="$(_normalize_line_numbers "$1")"
+    local expected_message="$1"
 
     tsk_test_assertions=$((tsk_test_assertions + 1))
 
@@ -392,7 +387,8 @@ _expect_error() {
 
     # Get the most recent error message
     local last_idx=$((${#tsk_test_error_messages[@]} - 1))
-    local last_message="$(_normalize_line_numbers "${tsk_test_error_messages[last_idx]}")"
+    local last_message="$(echo "${tsk_test_error_messages[last_idx]}" |
+        sed -E 's/line [0-9]+:/line nnn:/g')"
 
     if [ "$expected_message" = "$last_message" ]; then
         # the error was expected so it gets cleared
