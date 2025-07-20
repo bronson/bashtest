@@ -161,6 +161,22 @@ EOF
 # test:keep() {
 # }
 
+# TODO: this test needs to run first until we get a handle on tests leaving files behind
+test:aa_subtest_directories() {
+    # ensure there are no files in the cwd
+    is_eq "" "$(ls -A)"
+
+    cd "$(framework_dir)/fixtures/numbered"
+    $run_tests one.test -f test --keep
+    stdout_is <<EOF
+pass test:one
+EOF
+    cd "$(test_dir)"
+
+    is_eq "bashtest" "$(ls -A)"
+    rm -rf bashtest
+}
+
 # there's a stdin.test file that spends more time testing stdin
 test:run_stdio() {
     bash $tsk_framework_file - -f test <<EOL | sort

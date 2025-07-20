@@ -257,6 +257,11 @@ framework_dir() {
     dirname "$tsk_framework_file"
 }
 
+# returns the directory that every test starts in (unless before:each changes it)
+test_dir() {
+    echo "$tsk_root_dir/run"
+}
+
 # Returns the shared cache directory that is available to all tests in the current testfile
 cache_dir() {
     echo "$tsk_root_dir/cache"
@@ -604,6 +609,7 @@ _run_testfile_tests() {
     fi
 
     mkdir -p "$tsk_root_dir/run" "$tsk_root_dir/cache" 2>&4 || exit 1
+    export TSK_ROOT_DIR="$tsk_root_dir/run/bashtest"
     cd "$tsk_root_dir/run"
 
     # Run the before:all hook if defined
@@ -663,7 +669,13 @@ _prepare_test_environment() {
     # TODO: running in /tmp isn't good for tests that require giant files
     # TODO: option to create and mount a ramdisk to run tests
 
-    tsk_root_dir="$(mktemp -d "/tmp/bashtest-XXXXXX")"
+    # if we're a sub-test, the parent is telling us the directory to use
+    if [ -n "$TSK_ROOT_DIR" ]; then
+        tsk_root_dir="$TSK_ROOT_DIR"
+        mkdir -p "$tsk_root_dir" || exit 1
+    else
+        tsk_root_dir="$(mktemp -d "/tmp/bashtest-XXXXXX")"
+    fi
 }
 
 # given a testfile, ensure we return a unique name for this test

@@ -1,0 +1,55 @@
+#!/bin/bash
+
+# This testfile verifies the environment the tests are run in
+
+before:all() {
+    run_tests="$tsk_framework_file"
+}
+
+# every test must start in test_dir
+test:test_dir() {
+    is_eq "$(pwd)" "$(test_dir)"
+}
+
+# the before:each hook must start in test_dir
+test:test_dir_in_before_each() {
+    cat > dir.test <<'EOF'
+        before:each() {
+            is_eq "$(pwd)" "$(test_dir)"
+        }
+        test:working_dir() {
+            is_eq "$(pwd)" "$(test_dir)"
+        }
+EOF
+    $run_tests -f test | sort
+    stdout_is <<EOF
+pass test:working_dir
+EOF
+}
+
+# TODO: what are the cwds for before:all and after:all?
+
+# it's fine for tests to change directories, but ensure that
+# the directory is restored properly when the next test is run
+skikp:directory_is_set_for_each_test() {
+    run_tests="$tsk_framework_file"
+
+    cat > dir.test <<EOF
+test:1() {
+}
+
+test:2() {
+    cd /tmp
+    is_eq "$(pwd)" "/tmp"
+}
+
+test:3() {
+    is_eq "$(pwd)" "/tmp"
+}
+EOF
+
+    $run_tests - -f test <<EOF | sort
+EOF
+}
+
+source "$(dirname "$BASH_SOURCE")/run-tests"

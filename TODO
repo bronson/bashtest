@@ -1,3 +1,7 @@
+Need to do something about tests leaving files behind.
+
+---
+
 How do I keep run-tests out of the fixtures directory?
 (probably associated with having some sort of local config file)
 
