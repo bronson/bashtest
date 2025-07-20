@@ -482,7 +482,23 @@ _dot_formatter_post_test() {
 }
 
 _dot_formatter_test_summary() {
-    echo # _dot_formatter_post_test doesn't print a final newline so do it here
+    echo # _dot_formatter_post_test doesn't print a final newline so here it is
+
+    # DEBUG
+    echo $tsk_root_dir
+    exit
+
+    # Print fail-results if the file exists
+    if [ -f "$tsk_root_dir/fail-results" ]; then
+        echo "${RED}Failed tests:${NC}"
+        cat "$tsk_root_dir/fail-results"
+    fi
+
+    # Print skip-results if the file exists
+    if [ -f "$tsk_root_dir/skip-results" ]; then
+        echo "${YELLOW}Skipped tests:${NC}"
+        cat "$tsk_root_dir/skip-results"
+    fi
 }
 
 # called before each test starts
@@ -691,6 +707,14 @@ _run_multiple_testfiles() {
         (
             tsk_root_dir="$tsk_root_dir/$(_get_testfile_unique_dirname "$testfile")"
             _run_testfile_tests "$testfile"
+            # If these writes aren't atomic, the test processes might stomp on each other.
+            # Since this is extremely unlikely and not critical, we'll live with it.
+            if [ "$tsk_fail_count" -gt 0 ]; then
+                echo "  ✗ $testfile: $tsk_fail_count failed" >> "$tsk_root_dir/fail-results"
+            fi
+            if [ "$tsk_skip_count" -gt 0 ]; then
+                echo "  ○ $testfile: $tsk_skip_count skipped" >> "$tsk_root_dir/skip-results"
+            fi
         ) &
         running_jobs=$((running_jobs + 1))
     done

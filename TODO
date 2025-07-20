@@ -1,3 +1,13 @@
+It's a little annoying that running run-tests again creates another
+temporary directory that doesn't get cleaned up. Should we export
+a magic variable that tells run-tests to use our directory?
+
+---
+
+Add the reason the test was skipped to skip tests
+
+---
+
 How do I keep run-tests out of the fixtures directory?
 (probably associated with having some sort of local config file)
 
