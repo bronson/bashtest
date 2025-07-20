@@ -663,7 +663,7 @@ _prepare_test_environment() {
     # TODO: running in /tmp isn't good for tests that require giant files
     # TODO: option to create and mount a ramdisk to run tests
 
-    tsk_root_dir="$(mktemp -d "/tmp/tsk-test-XXXXXX")"
+    tsk_root_dir="$(mktemp -d "/tmp/bashtest-XXXXXX")"
 }
 
 # given a testfile, ensure we return a unique name for this test
