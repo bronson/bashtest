@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# TODO: probably want to remove running tests from stdin
 # TODO: maybe this file should test the test output
 
 test:run_passing_test_from_stdin() {

@@ -157,6 +157,10 @@ pass test:two
 EOF
 }
 
+# TODO: test the -k/--keep option
+# test:keep() {
+# }
+
 # there's a stdin.test file that spends more time testing stdin
 test:run_stdio() {
     bash $tsk_framework_file - -f test <<EOL | sort

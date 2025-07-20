@@ -325,7 +325,7 @@ _process_arguments() {
         --formatter=*) tsk_test_formatter="${1#*=}"; shift;;
         -j|--jobs) max_jobs="$2"; shift; shift;;
         --jobs=*) max_jobs="${1#*=}"; shift;;
-        -k|--keep) KEEP=true; shift;;
+        -k|--keep) tsk_keep_artifacts=true; shift;;
         -n|--name|--number) NAME="$2"; shift; shift;; # TODO
         -w|--watch) WATCH=true; shift;;               # TODO
         *) _add_argument "$1"; shift;;
@@ -516,10 +516,6 @@ _list_formatter_post_test() {
 
 _list_formatter_test_summary() {
     local color="$GREEN"
-    if [ $tsk_fail_count -eq 0 ]; then
-        # if all tests pass, there's no need to keep the test directory
-        rm -rf "$tsk_root_dir"
-    fi
 
     local skip_msg=""
     if [ $tsk_skip_count -gt 0 ]; then
@@ -662,6 +658,8 @@ _prepare_test_environment() {
     tsk_skip_count=0      # current number of tests skipped
     tsk_total_assertions=0 # total number of assertions made
 
+    tsk_keep_artifacts=''
+
     # TODO: running in /tmp isn't good for tests that require giant files
     # TODO: option to create and mount a ramdisk to run tests
 
@@ -696,8 +694,6 @@ _run_multiple_testfiles() {
     done
 
     wait  # wait for the remaining jobs to finish
-
-    rm -rf "$tsk_root_dir"
 }
 
 # there are many ways to run the tests:
@@ -718,5 +714,8 @@ else
     # TODO: need to print failures and results when running multiple test files
     tsk_test_formatter="${tsk_test_formatter:-dot}"
     _run_multiple_testfiles
+fi
+if [ "$tsk_keep_artifacts" != true ]; then
+    rm -rf "$tsk_root_dir"
 fi
 _${tsk_test_formatter}_formatter_test_summary
