@@ -487,7 +487,21 @@ _dot_formatter_post_test() {
 }
 
 _dot_formatter_test_summary() {
-    echo # _dot_formatter_post_test doesn't print a final newline so do it here
+    echo # _dot_formatter_post_test doesn't print a final newline so here it is
+
+    # if any failure results exist, print them
+    local fail_files=("$tsk_root_dir"/*/fail-results)
+    if [ -f "${fail_files[0]}" ]; then
+        echo -e "${RED}Failed tests:${NC}" >&3
+        cat "${fail_files[@]}" >&3
+    fi
+
+    # if any skip results exist, print them
+    local skip_files=("$tsk_root_dir"/*/skip-results)
+    if [ -f "${skip_files[0]}" ]; then
+        echo -e "${YELLOW}Skipped tests:${NC}" >&3
+        cat "${skip_files[@]}" >&3
+    fi
 }
 
 # called before each test starts
@@ -701,6 +715,12 @@ _run_multiple_testfiles() {
         (
             tsk_root_dir="$tsk_root_dir/$(_get_testfile_unique_dirname "$testfile")"
             _run_testfile_tests "$testfile"
+            if [ "$tsk_fail_count" -gt 0 ]; then
+                echo -e "  ${RED}✗${NC} $testfile: $tsk_fail_count tests failed" >> "$tsk_root_dir/fail-results"
+            fi
+            if [ "$tsk_skip_count" -gt 0 ]; then
+                echo -e "  ${YELLOW}○${NC} $testfile: $tsk_skip_count tests skipped" >> "$tsk_root_dir/skip-results"
+            fi
         ) &
         running_jobs=$((running_jobs + 1))
     done
@@ -727,7 +747,7 @@ else
     tsk_test_formatter="${tsk_test_formatter:-dot}"
     _run_multiple_testfiles
 fi
+_${tsk_test_formatter}_formatter_test_summary
 if [ "$tsk_keep_artifacts" != true ]; then
     rm -rf "$tsk_root_dir"
 fi
-_${tsk_test_formatter}_formatter_test_summary

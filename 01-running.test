@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# Tests what happens when running tests.
+#   - test output
+#   - ??
+
+before:all() {
+    # this is a little more readable
+    run_tests="$tsk_framework_file"
+}
+
+create_run_test() {
+    cat > run.test <<EOF
+        # this test is executed, not skipped
+        test:success() {
+            is_eq 1 1
+    	}
+
+    	test:fail() {
+    	    is_eq 1 2
+    	}
+
+    	skip:skipped() {
+    	    is_eq 1 2
+    	}
+EOF
+}
+
+# Multithreaded tests can appear in any order
+# So replaces, say, 'FF.s.s' with 'FFss..'
+fix_test_order() {
+    sed 's/^[\.Fs]\{6\}$/FFss../'
+}
+
+# ensure the dot formatter names the testfiles that had failed or skipped tests
+test:dot_formatter_test_results() {
+    create_run_test
+    # run it twice so we get the multithreaded dot formatter
+    $run_tests run.test run.test | fix_test_order
+    stdout_is <<EOF
+FFss..
+Failed tests:
+  ✗ run.test: 1 tests failed
+  ✗ run.test: 1 tests failed
+Skipped tests:
+  ○ run.test: 1 tests skipped
+  ○ run.test: 1 tests skipped
+EOF
+}
+
+source "$(dirname "$BASH_SOURCE")/run-tests"
