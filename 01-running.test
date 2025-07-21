@@ -40,11 +40,11 @@ test:dot_formatter_test_results() {
     stdout_is <<EOF
 FFss..
 Failed tests:
-  ✗ run.test: 1 tests failed
-  ✗ run.test: 1 tests failed
+  ✗ run.test: 1 test failed
+  ✗ run.test: 1 test failed
 Skipped tests:
-  ○ run.test: 1 tests skipped
-  ○ run.test: 1 tests skipped
+  ○ run.test: 1 test skipped
+  ○ run.test: 1 test skipped
 EOF
 }
 

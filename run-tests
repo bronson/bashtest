@@ -712,10 +712,10 @@ _run_multiple_testfiles() {
             tsk_root_dir="$tsk_root_dir/$(_get_testfile_unique_dirname "$testfile")"
             _run_testfile_tests "$testfile"
             if [ "$tsk_fail_count" -gt 0 ]; then
-                echo -e "  ${RED}✗${NC} $testfile: $tsk_fail_count tests failed" >> "$tsk_root_dir/fail-results"
+                echo -e "  ${RED}✗${NC} $testfile: $tsk_fail_count $(pluralize $tsk_fail_count test) failed" >> "$tsk_root_dir/fail-results"
             fi
             if [ "$tsk_skip_count" -gt 0 ]; then
-                echo -e "  ${YELLOW}○${NC} $testfile: $tsk_skip_count tests skipped" >> "$tsk_root_dir/skip-results"
+                echo -e "  ${YELLOW}○${NC} $testfile: $tsk_skip_count $(pluralize $tsk_skip_count test) skipped" >> "$tsk_root_dir/skip-results"
             fi
         ) &
         running_jobs=$((running_jobs + 1))

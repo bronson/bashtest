@@ -43,6 +43,22 @@ test:skip_functions() {
 EOF
 }
 
+# test the dot formatter instead of the list formatter above
+test:skip_functions_multithread() {
+    cat > skip.test <<EOF
+        skip:nop() {
+            is_eq 1 1
+    	}
+EOF
+    $run_tests skip.test skip.test
+    stdout_is <<EOF
+ss
+Skipped tests:
+  ○ skip.test: 1 test skipped
+  ○ skip.test: 1 test skipped
+EOF
+}
+
 # ensure we skip all tests in a file named *.skip
 test:skip_file() {
     create_skip_test
