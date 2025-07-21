@@ -129,7 +129,7 @@ _compare() {
 
     tsk_test_assertions=$((tsk_test_assertions + 1))
     if [ ! x"$expected" "$op" x"$actual" ]; then
-       _add_error "line $(_line_number 2): ${FUNCNAME[1]} expected '$expected', got '$actual'"
+       _add_error "line $(_line_number 2): ${FUNCNAME[1]} $(_format_diff "$expected" "$actual")"
     fi
 }
 
@@ -267,11 +267,6 @@ cache_dir() {
     echo "$tsk_root_dir/cache"
 }
 
-# call this to make differences be displayed using `diff` rather than side-by-side
-# TODO: this needs to be improved!
-want_diff() {
-    tsk_test_want_format="diff"
-}
 
 # call this when writing tests to dump its arguments immediately to the screen
 debug() {
@@ -325,7 +320,7 @@ _process_arguments() {
     # TODO: if a directory is specified, add all .test files in that directory
     # TODO: should we care about whether a testfile argument ends in '.test'?
     while (( "$#" )); do case $1 in
-        -d|--dir) DIR="$2"; shift; shift;;
+        -d|--diff) tsk_use_diff=true; shift;;
         -f|--formatter) tsk_test_formatter="$2"; shift; shift;;
         --formatter=*) tsk_test_formatter="${1#*=}"; shift;;
         -j|--jobs) max_jobs="$2"; shift; shift;;
@@ -367,25 +362,25 @@ _blockquote() {
 }
 
 _format_diff() {
-    local expected="$1"
-    local actual="$2"
-
-    # For short single-line content, always use simple quoted format
-    if [[ "$expected" != *$'\n'* && "$actual" != *$'\n'* &&
-          ${#expected} -lt 30 && ${#actual} -lt 30 ]]; then
-        echo "expected '$expected', got '$actual'"
-        return
-    fi
+    local expected="$1" actual="$2"
 
     # if the user asked for a diff, provide it
-    if [ "$tsk_test_want_format" = "diff" ] && command -v diff &>/dev/null; then
-        local diff_output="$(diff -u <(echo "$expected") <(echo "$actual") | tail -n +3 | cat -vet)"
+    if [ "$tsk_use_diff" = true ]; then
+        local diff_output="$(diff -u <(echo "$expected") <(echo "$actual") | tail -n +4)"
         if [[ -n "$diff_output" ]]; then
             echo "diff:"$'\n'"$(_blockquote "$diff_output")"
             return
         fi
     fi
 
+    # For short single-line content, use simple quoted format
+    if [[ "$expected" != *$'\n'* && "$actual" != *$'\n'* &&
+          ${#expected} -lt 30 && ${#actual} -lt 30 ]]; then
+        echo "expected '$expected', got '$actual'"
+        return
+    fi
+
+    # Otherwise, quote the full files
     echo "expected:"$'\n'"$(_blockquote "$expected")"$'\n'"    but got:"$'\n'"$(_blockquote "$actual")"
 }
 
@@ -603,7 +598,6 @@ _run_testfile_tests() {
         tsk_skip_all_tests=true
     fi
 
-    local tsk_test_want_format="" # TODO: this sucks.
 
     # load the testfile if it's not already loaded
     if [ "$tsk_testfile" != "$tsk_launched_file" ]; then
@@ -679,6 +673,7 @@ _prepare_test_environment() {
     tsk_total_assertions=0 # total number of assertions made
 
     tsk_keep_artifacts=''
+    tsk_use_diff=''
 
     # TODO: running in /tmp isn't good for tests that require giant files
     # TODO: option to create and mount a ramdisk to run tests

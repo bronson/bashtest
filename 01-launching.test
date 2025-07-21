@@ -177,6 +177,20 @@ EOF
     rm -rf bashtest
 }
 
+test:diff_option() {
+    echo "test:fail_test() {" > failing.test
+    echo "    is_eq 'expected' 'actual'" >> failing.test
+    echo "}" >> failing.test
+
+    $run_tests failing.test -f test --diff
+    stdout_is <<EOF
+fail test:fail_test
+  - line 2: is_eq diff:
+    | -expected
+    | +actual
+EOF
+}
+
 # there's a stdin.test file that spends more time testing stdin
 test:run_stdio() {
     bash $tsk_framework_file - -f test <<EOL | sort
