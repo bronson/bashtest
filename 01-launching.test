@@ -25,11 +25,11 @@ EOF
 test:run_multiple_testfiles() {
     # tests and testfiles are run in indeterminate order so we need to sort the output
     cd "$(framework_dir)/fixtures/numbered"
-    $run_tests one.test two.test three.test --formatter=test | sort
+    $run_tests one.test ../lettered/b.test three.test --formatter=test | sort
     stdout_is <<EOF
+pass test:b
 pass test:one
 pass test:three
-pass test:two
 EOF
 }
 
@@ -76,10 +76,10 @@ EOF
 
 test:launch_multiple_testfiles() {
     cd "$(framework_dir)/fixtures/numbered"
-    ./one.test two.test three.test -f test | sort
+    ./one.test two.test ../lettered/b.test -f test | sort
     stdout_is <<EOF
+pass test:b
 pass test:one
-pass test:three
 pass test:two
 EOF
 }
@@ -208,54 +208,14 @@ fail test:fail_test
 EOF
 }
 
-# there's a stdin.test file that spends more time testing stdin
-test:run_stdio() {
-    bash $tsk_framework_file - -f test <<EOL | sort
-        test:run_test() { is_eq 1 1; }
-EOL
+# Test that a file named '-' can be run (since - no longer means stdin)
+test:run_file_named_dash() {
+    echo "test:dash_test() { is_eq 1 1; }" > "-"
+    $run_tests "-" -f test
     stdout_is <<EOF
-pass test:run_test
+pass test:dash_test
 EOF
-}
-
-# TODO: error message when specifying stdin more than once
-skip:run_stdio_duplicate() {
-    bash $tsk_framework_file - - - - -f test <<EOL | sort
-        test:run_test() { is_eq 1 1; }
-EOL
-    stdout_is <<EOF
-pass test:run_test
-pass test:run_test
-pass test:run_test
-pass test:run_test
-EOF
-}
-
-# this is a weird and not essential usecase
-skip:run_stdio_multiple() {
-    cd "$(framework_dir)/fixtures/numbered"
-    bash $tsk_framework_file one.test - two.test -f test <<EOL | sort
-        test:run_test() { is_eq 1 1; }
-EOL
-    stdout_is <<EOF
-pass test:one
-pass test:run_test
-pass test:two
-EOF
-}
-
-# this is a weird and not essential usecase
-skip:launch_with_stdio_multiple() {
-    cd "$(framework_dir)/fixtures/numbered"
-    ./one.test - two.test -f test <<EOL | sort
-        test:run_test() { is_eq 1 1; }
-EOL
-    stdout_is <<EOF
-pass test:one
-pass test:run_test
-pass test:two
-EOF
-
+    rm "-"
 }
 
 source "$(dirname "$BASH_SOURCE")/run-tests"

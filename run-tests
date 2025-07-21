@@ -244,7 +244,6 @@ EOF
 
 # Returns the directory of the currently running testfile
 testfile_dir() {
-    # TODO/TOTEST: what if the test is coming from stdin? dirname of STDIN?
     if [ -z "$tsk_testfile" ]; then
         echo "Error: testfile_dir was called without a testfile!" >&4
         exit 1
@@ -298,7 +297,6 @@ pluralize() {
 
 # accepts testfiles and directories
 _add_argument() {
-    # TODO: ensure the user can only specify stdin once?
     if [ -d "$1" ]; then
         while IFS= read -r file; do
             testfiles+=("$file")
@@ -606,14 +604,10 @@ _run_testfile_tests() {
             unset -f "$func"
         done
 
-        if [ "$tsk_testfile" = "-" ]; then
-            source <(cat) # load the testfile from stdin
-        else
-            # convert to aboslute path because we'll be running the test
-            # in a different directory than the cwd
-            tsk_testfile="$(readlink -f "$tsk_testfile")"
-            source "$tsk_testfile"
-        fi
+        # convert to aboslute path because we'll be running the test
+        # in a different directory than the cwd
+        tsk_testfile="$(readlink -f "$tsk_testfile")"
+        source "$tsk_testfile"
     fi
 
     mkdir -p "$tsk_root_dir/run" "$tsk_root_dir/cache" 2>&4 || exit 1
@@ -726,7 +720,6 @@ _run_multiple_testfiles() {
 
 # there are many ways to run the tests:
 # - Run multiple test files: ./run-tests file1.test file2.test
-# - Run tests from stdin: cat test | ./run-tests -
 # - Run a single test file: ./01-my-tests.test
 # - You should also be able to run multiple tests: ./01-a.test 02-b.test
 # - if you name a directory, all tests in that directory will be run.
