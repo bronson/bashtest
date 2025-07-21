@@ -326,7 +326,8 @@ _process_arguments() {
         -j|--jobs) max_jobs="$2"; shift; shift;;
         --jobs=*) max_jobs="${1#*=}"; shift;;
         -k|--keep) tsk_keep_artifacts=true; shift;;
-        -n|--name|--number) NAME="$2"; shift; shift;; # TODO
+        -m|--matching) tsk_match_utility="grep $2"; shift; shift;;
+        --matching=*) tsk_match_utility="grep ${1#*=}"; shift;;
         -w|--watch) WATCH=true; shift;;               # TODO
         *) _add_argument "$1"; shift;;
     esac; done
@@ -445,12 +446,11 @@ _check_for_abandoned_files() {
 
 # Generates a list of test functions to run.
 _find_tests() {
-    # `declare -F | cut -d" " -f3 | grep '^test:'`
-    # `typeset -F` seems to be a synonym for declare F
+    # or: `declare -F | cut -d" " -f3 | grep '^test:'`
     compgen -A function test:
     compgen -A function skip:
     # TODO: should run the tests in the order they're declared
-    # in the file, not in alphabetical order.
+    # in the file, not in whatever alphabetical order compgen returns.
 }
 
 _print_test_error_messages() {
@@ -632,7 +632,7 @@ _run_testfile_tests() {
     fi
 
     local tsk_test_name
-    for tsk_test_name in $(_find_tests); do
+    for tsk_test_name in $(_find_tests | $tsk_match_utility); do
         # Reset test-specific variables for each test
         tsk_test_assertions=0
         tsk_test_error_messages=()
@@ -674,6 +674,7 @@ _prepare_test_environment() {
 
     tsk_keep_artifacts=''
     tsk_use_diff=''
+    tsk_match_utility='cat'
 
     # TODO: running in /tmp isn't good for tests that require giant files
     # TODO: option to create and mount a ramdisk to run tests

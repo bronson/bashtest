@@ -177,6 +177,23 @@ EOF
     rm -rf bashtest
 }
 
+test:matching_option() {
+    # Test that --matching filters tests correctly
+    cd "$(framework_dir)"
+    # runs the 3 testfiles, but only one test matches
+    $run_tests fixtures/lettered --matching="b" -f test | sort
+    stdout_is <<EOF
+pass test:b
+EOF
+}
+
+test:matching_no_matches() {
+    # returns empty if no test matches
+    cd "$(framework_dir)"
+    $run_tests fixtures/lettered --matching="nonexistent" -f test
+    stdout_is ""
+}
+
 test:diff_option() {
     echo "test:fail_test() {" > failing.test
     echo "    is_eq 'expected' 'actual'" >> failing.test

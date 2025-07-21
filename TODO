@@ -1,4 +1,6 @@
-Add ability to only run tests matching a name
+add a site-specific config file. It can prune directories so they're
+not searched for tests, it can define functions that are availalbe in
+all tests, ...
 
 ---
 
