@@ -1,0 +1,49 @@
+#!/bin/bash
+
+# Tests all the ways to skip tests.
+#
+# TODO: before_all should be able to skip the entire testfile
+
+before:all() {
+    # this is a little more readable
+    run_tests="$tsk_framework_file"
+}
+
+
+# Make sure the config file gets loaded.
+# The test copies run-tests
+
+test:config_file() {
+    cp "$tsk_framework_file" ./run-tests
+    chmod +x ./run-tests
+    # if the test formatter is used, our config took effect
+    echo "tsk_test_formatter=test" > test-config
+    echo "test:sample() { is_eq 1 1; }" > sample.test
+
+    ./run-tests
+    # make sure the result used the test formatter
+    stdout_is <<EOF
+pass test:sample
+EOF
+
+    rm run-tests test-config sample.test
+}
+
+# Make sure the config file can abort the test
+test:config_file_abort() {
+    cp "$tsk_framework_file" ./run-tests
+    chmod +x ./run-tests
+    # if the test formatter is used
+    echo "tsk_test_formatter=test" > test-config
+    echo "test:sample() { abort 'this actually worked!'; }" > sample.test
+
+    ./run-tests
+    is_eq 127 $?
+    stdout_is <<EOF
+ 01 ABORT  test:sample line 1: this actually worked!
+TEST ABORTED
+EOF
+
+    rm run-tests test-config sample.test
+}
+source "$(dirname "$BASH_SOURCE")/run-tests"

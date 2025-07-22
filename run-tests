@@ -91,14 +91,11 @@ if [ "${BASH_SOURCE[0]}" != "$0" ]; then
     tsk_launched_file="${BASH_SOURCE[1]}"
 fi
 
-# tests have their output redirected to files so we need to:
-exec 3>&1 4>&2 # save stdout and stderr to FDs 3 and 4
-
 # TODO: this is a misnomer... we also use tsk_use_color to indicate
 # if we should use control codes to do curses-style terminal output
 if [ -z "${tsk_use_color}" ]; then
     tsk_use_color=false
-    if [ -t 3 ]; then
+    if [ -t 1 ]; then
         tsk_use_color=true
     fi
 fi
@@ -118,6 +115,9 @@ else
     NC=''
     CR=''
 fi
+
+# tests have their output redirected to files so we need to:
+exec 3>&1 4>&2 # save stdout and stderr to FDs 3 and 4
 
 
 #
@@ -680,6 +680,9 @@ _prepare_test_environment() {
     else
         tsk_root_dir="$(mktemp -d "/tmp/bashtest-XXXXXX")"
     fi
+
+    local config_file="$(dirname "$tsk_framework_file")/test-config"
+    [ -f "$config_file" ] && source "$config_file"
 }
 
 # given a testfile, ensure we return a unique name for this test
