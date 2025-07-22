@@ -24,6 +24,11 @@ How can I test the pause function?
 
 ---
 
+pluralize callers almost always prints the number first, so just have
+pluralize print the number.
+
+---
+
 ensure tests are started in the run directory
 and that if a previous test cd'd, the next test still starts in the rundir.
 

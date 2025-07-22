@@ -116,6 +116,11 @@ else
     CR=''
 fi
 
+# Benchmark timing variables
+tsk_benchmark_enabled=false
+tsk_benchmark_start_time=""
+tsk_benchmark_total_time=0
+
 # tests have their output redirected to files so we need to:
 exec 3>&1 4>&2 # save stdout and stderr to FDs 3 and 4
 
@@ -318,6 +323,7 @@ _process_arguments() {
     # TODO: if a directory is specified, add all .test files in that directory
     # TODO: should we care about whether a testfile argument ends in '.test'?
     while (( "$#" )); do case $1 in
+        -b|--benchmark) tsk_benchmark_enabled=true; shift;;
         -d|--diff) tsk_use_diff=true; shift;;
         -f|--formatter) tsk_test_formatter="$2"; shift; shift;;
         --formatter=*) tsk_test_formatter="${1#*=}"; shift;;
@@ -730,6 +736,12 @@ _run_multiple_testfiles() {
 
 _prepare_test_environment
 _process_arguments "$@"
+
+# Start benchmark timer if enabled (after arguments are processed)
+if [ "$tsk_benchmark_enabled" = true ]; then
+    tsk_benchmark_start_time=$(date +%s%N)  # epoch seconds + nanoseconds
+fi
+
 # if the user supplies a single testfile, we show a more verbose output than if they're running multiple
 if [ ${#testfiles[@]} -eq 1 ]; then
     tsk_test_formatter="${tsk_test_formatter:-list}"
@@ -739,7 +751,14 @@ else
     tsk_test_formatter="${tsk_test_formatter:-dot}"
     _run_multiple_testfiles
 fi
+
 _${tsk_test_formatter}_formatter_test_summary
 if [ "$tsk_keep_artifacts" != true ]; then
     rm -rf "$tsk_root_dir"
+fi
+
+if [ "$tsk_benchmark_enabled" = true ] && [ -n "$tsk_benchmark_total_time" ]; then
+    elapsed_ms=$(( ($(date +%s%N) - tsk_benchmark_start_time) / 1000000 ))
+    tsk_benchmark_total_time=$(printf "%d.%03d" $((elapsed_ms / 1000)) $((elapsed_ms % 1000)))
+    echo -e "${GREEN}Running${NC} ${#testfiles[@]} ${GREEN}$(pluralize ${#testfiles[@]} testfile) took${NC} ${tsk_benchmark_total_time} ${GREEN}seconds${NC}"
 fi

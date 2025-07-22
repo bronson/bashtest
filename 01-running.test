@@ -48,4 +48,17 @@ Skipped tests:
 EOF
 }
 
+# verify the benchmark feature exists
+test:benchmark_works() {
+    echo 'test:quick() { is_eq 1 1; }' > bench.test
+    # Run with benchmark and verify output contains benchmark timing
+    $run_tests -b bench.test -f test | sed 's/[0-9][0-9]*\.[0-9][0-9]*/XX.XX/g'
+    stdout_is <<EOL
+pass test:quick
+Running 1 testfile took XX.XX seconds
+EOL
+
+    rm bench.test
+}
+
 source "$(dirname "$BASH_SOURCE")/run-tests"
