@@ -2,6 +2,12 @@ rename it test-conf.sh so syntax highlighting works
 
 ---
 
+maybe subtests need a stronger solution, where they run a different
+./run-tests executable from the global one, so they get a different config
+file too. Or some other way of clearing the config file?
+
+---
+
 add more tests for nested excluded directories
 
 ---

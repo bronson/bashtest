@@ -17,7 +17,7 @@ test:config_file() {
     cp "$tsk_framework_file" ./run-tests
     chmod +x ./run-tests
     # if the test formatter is used, our config took effect
-    echo "tsk_test_formatter=test" > test-config
+    echo "tsk_test_formatter=test" > test-config.sh
     echo "test:sample() { is_eq 1 1; }" > sample.test
 
     ./run-tests
@@ -26,14 +26,14 @@ test:config_file() {
 pass test:sample
 EOF
 
-    rm run-tests test-config sample.test
+    rm run-tests test-config.sh sample.test
 }
 
 # Make sure the config file can abort the test
 test:config_file_abort() {
     cp "$tsk_framework_file" ./run-tests
     chmod +x ./run-tests
-    echo "tsk_test_formatter=test" > test-config
+    echo "tsk_test_formatter=test" > test-config.sh
     echo "test:sample() { abort 'this worked'; }" > sample.test
 
     ./run-tests
@@ -43,7 +43,7 @@ test:config_file_abort() {
 TEST ABORTED
 EOF
 
-    rm run-tests test-config sample.test
+    rm run-tests test-config.sh sample.test
 }
 
 # verify that definitions in the config file are available to all tests
@@ -54,8 +54,8 @@ test:config_file_definitions() {
     chmod +x ./run-tests
 
     # create a config file that defines a function and sets a variable
-    echo "my_var=is_set" > test-config
-    echo "my_func() { echo 'runs'; }" >> test-config
+    echo "my_var=is_set" > test-config.sh
+    echo "my_func() { echo 'runs'; }" >> test-config.sh
 
     # create a testfile that ensures they're still set
     echo "test:sample() {" > sample.test
@@ -67,7 +67,7 @@ test:config_file_definitions() {
     stdout_is <<EOF
 pass test:sample
 EOF
-    rm run-tests test-config sample.test
+    rm run-tests test-config.sh sample.test
 }
 
 # verify that exclude_directory in config file works
@@ -82,7 +82,7 @@ test:config_file_exclude_directory() {
     echo 'test:real() { is_eq 1 1; }' > src/real.test
 
     # config file excludes the fixtures directory
-    echo "exclude_directory fixtures" > test-config
+    echo "exclude_directory fixtures" > test-config.sh
 
     # run tests - should only find src/real.test
     ./run-tests -f test .
@@ -90,7 +90,7 @@ test:config_file_exclude_directory() {
 pass test:real
 EOL
 
-    rm -rf run-tests test-config fixtures src
+    rm -rf run-tests test-config.sh fixtures src
 }
 
 source "$(dirname "$BASH_SOURCE")/run-tests"

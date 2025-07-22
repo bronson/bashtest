@@ -716,7 +716,7 @@ _prepare_test_environment() {
         tsk_root_dir="$(mktemp -d "/tmp/bashtest-XXXXXX")"
     fi
 
-    local config_file="$(dirname "$tsk_framework_file")/test-config"
+    local config_file="$(dirname "$tsk_framework_file")/test-config.sh"
     [ -f "$config_file" ] && source "$config_file"
 }
 

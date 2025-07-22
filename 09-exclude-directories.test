@@ -11,8 +11,8 @@ before:all() {
 # Excluding via config file is tested in `config-file.test`.
 
 create_exclude_fixtures() {
-    mkdir -p testdir/fixtures
-    echo 'test:fixture() { is_eq 1 1; }' > testdir/fixtures/fixture.test
+    mkdir -p testdir/testures
+    echo 'test:fixture() { is_eq 1 1; }' > testdir/testures/fixture.test
     mkdir -p testdir/src
     echo 'test:real() { is_eq 1 1; }' > testdir/src/real.test
 }
@@ -23,7 +23,7 @@ test:exclude_via_command_line() {
     $run_tests -f test testdir | sort
     echo
     echo 'Then run with excluding, should find only real.test:'
-    $run_tests -f test --exclude fixtures testdir
+    $run_tests -f test --exclude testures testdir
 
     stdout_is <<EOF
 First run without excluding, should find both files:
@@ -43,9 +43,9 @@ test:exclude_multiple_directories() {
     echo 'test:from_vendor() { is_eq 1 1; }' > testdir/vendor/vendor.test
 
     echo "with vendor:"
-    $run_tests -f test --exclude fixtures testdir | sort
+    $run_tests -f test --exclude testures testdir | sort
     echo "without vendor:"
-    $run_tests -f test --exclude fixtures --exclude vendor testdir | sort
+    $run_tests -f test --exclude testures --exclude vendor testdir | sort
     stdout_is <<EOF
 with vendor:
 pass test:from_vendor
@@ -58,7 +58,7 @@ EOF
 
 test:exclude_with_equals_syntax() {
     create_exclude_fixtures
-    $run_tests -f test --exclude=fixtures testdir | sort
+    $run_tests -f test --exclude=testures testdir | sort
     stdout_is <<EOF
 pass test:real
 EOF
@@ -88,7 +88,7 @@ EOF
 # Test -e short option
 test:exclude_with_short_option() {
     create_exclude_fixtures
-    $run_tests -f test testdir -e fixtures
+    $run_tests -f test testdir -e testures
     stdout_is <<EOF
 pass test:real
 EOF
@@ -97,10 +97,10 @@ EOF
 
 # test what happens if the user excludes a dir and also names that dir on the command line
 test:exclude_and_include_simultaneously() {
-    mkdir -p fixtures
-    echo 'test:fixture() { is_eq 1 1; }' > fixtures/fixture.test
+    mkdir -p testures
+    echo 'test:fixture() { is_eq 1 1; }' > testures/fixture.test
 
-    $run_tests fixtures -f test -e fixtures
+    $run_tests testures -f test -e testures
     stdout_is <<EOF
 pass test:fixture
 EOF
