@@ -89,7 +89,7 @@ fine for what we need.
 
 job-test-newdirs (creating and removing a directory for each job)
 is slow as all heck ... until you start slamming jobs in parallel.
-At 16 simultaneous jobs, the time to create and destory test directories
+At 16 simultaneous jobs, the time to create and destroy test directories
 is swamped by the rest of the test overhead. It basically disappears.
 (These numbers are so close to the baseline that I'm amazed that they're accurate,
 but I've checked the results and they look fine.)
@@ -146,4 +146,4 @@ as we can onto the filesystem and run the tests massively in parallel. That's mu
 easier code to write and debug.
 
 This is unexpected good news. Today, at least, there's no need to choose between
-speed and code complexity. The simple algorithm is as fast as the complex one.
+speed and code complexity. The simple algorithm is effectively as fast as the complex one.
