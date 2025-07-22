@@ -1,6 +1,36 @@
-add a site-specific config file. It can prune directories so they're
-not searched for tests, it can define functions that are availalbe in
-all tests, ...
+rename it test-conf.sh so syntax highlighting works
+
+---
+
+add more tests for nested excluded directories
+
+---
+
+Now that we have a config file, we probably need to be able to specify any
+number of before:each, before:all etc.
+
+---
+
+Make sure before:all runs once before testfiles are forked, and before:each
+runs in each subshell, not affecting other subshells.
+
+---
+
+Depending on research, make it possible to use the after:each hook to either
+clean up after each test, or if cleanup is automatic, to fail if any tests leave
+files behind (in case the project wants to be more pedantic).
+
+---
+
+in addition to missing testfiles, what if I don't have permission to read a testfile?
+
+---
+
+verify tsk_launched_file can only ever be a testfile, then rename it to tsk_launched_testfile
+
+---
+
+why is the abort message in test:missing_testfiles so weird looking?
 
 ---
 
@@ -26,6 +56,16 @@ How can I test the pause function?
 
 pluralize callers almost always prints the number first, so just have
 pluralize print the number.
+
+---
+
+Write an example before:each config that loads config files hierarchically
+starting from the testfile and moving back up to the root dir. That
+way each directory can share a config.
+
+---
+
+Get all usage of tsk_ variables out of testfiles. It's too dirty.
 
 ---
 

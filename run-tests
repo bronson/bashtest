@@ -85,6 +85,9 @@ fi
 tsk_orig_cwd="$(pwd)"     # save the directory we were started in
 tsk_framework_file="$(readlink -f "${BASH_SOURCE[0]}")"
 
+# if config files exclude any directories, they're stored here until argumets are processed
+tsk_exclude_dirs=()
+
 # if the user ran a testfile directly (`./01.test`), tsk_launched_file will be that file
 tsk_launched_file=""
 if [ "${BASH_SOURCE[0]}" != "$0" ]; then
@@ -295,29 +298,42 @@ pluralize() {
     fi
 }
 
+# Prevents the given directories from automatically being included in test runs.
+# (excluded tests can still be run by naming them explicitly on the command line)
+exclude_directory() {
+    case "$1" in
+        *[\*\?\[\]\\]*) abort "invalid filename: '$excluded_dir'" ;;
+    esac
+    tsk_exclude_dirs+=("$1")
+}
+
 
 #
 #    Internal code to run the tests
 #
 
-# accepts testfiles and directories
-_add_argument() {
-    if [ -d "$1" ]; then
-        while IFS= read -r file; do
-            testfiles+=("$file")
-        done < <(find "$1" -type f \( -name "*.test" -o -name "*.skip" \) | sort)
-    else
-        testfiles+=("$1")
-    fi
+_expand_directory() {
+    local find_args=("$1")
+    # prune any excluded directories
+    for excluded_dir in "${tsk_exclude_dirs[@]}"; do
+        find_args+=("-path" "*/$excluded_dir" "-prune" "-o")
+    done
+    # match .test and .skip files
+    find_args+=("-type" "f" "(" "-name" "*.test" "-o" "-name" "*.skip" ")" "-print0")
+    # run find, sort it, and stuff its results into the testfiles array
+    while IFS= read -r -d '' testfile; do
+        testfiles+=("$testfile")
+    done < <(find "${find_args[@]}" | sort -z)
 }
 
 _process_arguments() {
-    testfiles=()
+    local arguments=()
+    testfiles=() # TODO: declare this global list of testfiles
     max_jobs=12  # not the fastest but should be reasonably close
 
     # If the test harness is being sourced from a testfile, add the testfile.
     if [ -n "$tsk_launched_file" ]; then
-        testfiles+=("$tsk_launched_file")
+        arguments+=("$tsk_launched_file")
     fi
 
     # TODO: if a directory is specified, add all .test files in that directory
@@ -332,8 +348,10 @@ _process_arguments() {
         -k|--keep) tsk_keep_artifacts=true; shift;;
         -m|--matching) tsk_match_utility="grep $2"; shift; shift;;
         --matching=*) tsk_match_utility="grep ${1#*=}"; shift;;
+        -e|--exclude) exclude_directory "$2"; shift; shift;;
+        --exclude=*) exclude_directory "${1#*=}"; shift;;
         -w|--watch) WATCH=true; shift;;               # TODO
-        *) _add_argument "$1"; shift;;
+        *) arguments+=("$1"); shift;;
     esac; done
 
     # ensure max_jobs is a positive integer
@@ -342,10 +360,21 @@ _process_arguments() {
         exit 1
     fi
 
-    # If no test files were specified, run all .test files recursively
-    if [ ${#testfiles[@]} -eq 0 ]; then
-        _add_argument '.'
+    # If no files or directories were specified, run all files in the cwd.
+    if [ ${#arguments[@]} -eq 0 ]; then
+        arguments+=(".")
     fi
+
+    # expand the arguments into an array of testfiles
+    for arg in "${arguments[@]}"; do
+        if [ -d "$arg" ]; then
+            _expand_directory "$arg"
+        elif [ -f "$arg" ]; then
+            testfiles+=("$arg")
+        else
+            abort "Could not find $arg"
+        fi
+    done
 
     if [ ${#testfiles[@]} -eq 0 ]; then
         echo "No testfiles found. Testfile names must end in '.test'." >&2

@@ -9,6 +9,20 @@ before:all() {
     run_tests="$tsk_framework_file"
 }
 
+# missing/invalid testfiles stop testing before any testfiles are loaded
+test:missing_testfiles() {
+    # if we even try to load this test, it should cause an error.
+    echo 'echo WRONG >&2; exit 1' > existing.test
+
+    # list missing.test last so we're sure it's tested before anything gets loaded
+    $run_tests existing.test missing.test
+    stdout_is <<EOF
+ 00 ABORT   line 375: Could not find missing.test
+TEST ABORTED
+EOF
+}
+
+
 create_run_test() {
     cat > run.test <<EOF
         # this test is executed, not skipped
