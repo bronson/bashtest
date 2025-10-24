@@ -1,0 +1,26 @@
+#!/bin/bash
+
+# Example configuration file for bash test framework
+# This file is sourced by run-tests before test execution
+#
+# To use this file, copy it to test-config.sh in the same directory as run-tests:
+#   cp test-config.example test-config.sh
+
+# Example: Exclude directories from test discovery
+# This is useful to exclude fixture directories or other non-test directories
+# exclude_directory fixtures
+
+# Exclude multiple directories by calling it again:
+# exclude_directory dir1
+# exclude_directory dir2
+
+# Example: Set custom formatter
+# tsk_test_formatter=test
+
+# Example: Define functions available to all tests
+# my_helper() {
+#     echo "This function is available in all tests"
+# }
+
+# Example: Set variables available to all tests
+# MY_TEST_VAR="This value is available in all tests"

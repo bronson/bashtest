@@ -1,0 +1,60 @@
+#!/bin/bash
+
+#
+#    make sure tests can change the cwd without breaking other tests
+#
+
+# before:all can change directories and generate output, both will be ignored.
+before:all() {
+    echo "before:all"
+    cd /etc
+}
+
+# after:all, like before:all, ignores output or changed directories.
+after:all() {
+    echo "after:all   "
+    cd /etc
+}
+
+# if before:each produces output or changes the directory, the test must deal with it.
+before:each() {
+    echo "before:each"
+    cd /tmp
+}
+
+# if after:each produces output, that will fail the test.
+after:each() {
+    echo "after:each   "
+    pwd
+    cd /etc
+}
+
+test:one() {
+    echo "test:one"
+    pwd
+    cd /var
+
+stdout_is <<EOF
+before:each
+test:one
+/tmp
+after:each
+/var
+EOF
+}
+
+test:two() {
+    echo "test:two"
+    pwd
+    cd /usr
+
+stdout_is <<EOF
+before:each
+test:two
+/tmp
+after:each
+/usr
+EOF
+}
+
+source "$(dirname "$BASH_SOURCE")/run-tests"

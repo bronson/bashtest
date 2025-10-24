@@ -1,0 +1,14 @@
+#!/bin/bash
+
+if [ -z "$1" ] || [ -z "$2" ]; then
+    echo "Usage: $0 <number of files> <number of tests per file>"
+    echo "For example: $0 16 256"
+    exit 1
+fi
+
+rm test-*.test
+for i in $(seq "$1"); do
+    for j in $(seq "$2"); do
+        echo "test:$j() { is_eq 1 1; }"
+    done > "test-$i.test"
+done
