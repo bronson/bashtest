@@ -84,6 +84,7 @@ fi
 # Store the path to the run-tests.sh script for later use
 tsk_orig_cwd="$(pwd)"     # save the directory we were started in
 tsk_framework_file="$(readlink -f "${BASH_SOURCE[0]}")"
+tsk_repeat=1              # the number of times to repeat the entire test run
 
 # if config files exclude any directories, they're stored here until argumets are processed
 tsk_excluded_dirs=()
@@ -328,6 +329,14 @@ _expand_directory() {
     done < <(find "${find_args[@]}" | sort -z)
 }
 
+# also ensures the number is positive
+_ensure_numeric_argument() {
+    if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+        echo "invalid $1 argument: $2" >&2
+        exit 1
+    fi
+}
+
 _process_arguments() {
     local arguments=()
     testfiles=() # TODO: declare this global list of testfiles
@@ -343,6 +352,8 @@ _process_arguments() {
     while (( "$#" )); do case $1 in
         -b|--benchmark) tsk_benchmark_enabled=true; shift;;
         -d|--diff) tsk_use_diff=true; shift;;
+        -e|--exclude) exclude_directory "$2"; shift; shift;;
+        --exclude=*) exclude_directory "${1#*=}"; shift;;
         -f|--formatter) tsk_test_formatter="$2"; shift; shift;;
         --formatter=*) tsk_test_formatter="${1#*=}"; shift;;
         -j|--jobs) max_jobs="$2"; shift; shift;;
@@ -350,17 +361,14 @@ _process_arguments() {
         -k|--keep) tsk_keep_artifacts=true; shift;;
         -m|--matching) tsk_match_utility="grep $2"; shift; shift;;
         --matching=*) tsk_match_utility="grep ${1#*=}"; shift;;
-        -e|--exclude) exclude_directory "$2"; shift; shift;;
-        --exclude=*) exclude_directory "${1#*=}"; shift;;
+        -r|--repeat) tsk_repeat="$2"; shift; shift;;
+        --repeat=*) tsk_repeat="${1#*=}"; shift;;
         -w|--watch) WATCH=true; shift;;               # TODO
         *) arguments+=("$1"); shift;;
     esac; done
 
-    # ensure max_jobs is a positive integer
-    if [[ ! "$max_jobs" =~ ^[0-9]+$ ]]; then
-        echo "invalid max jobs: '$max_jobs'"
-        exit 1
-    fi
+    _ensure_numeric_argument "max jobs" "$max_jobs"
+    _ensure_numeric_argument "repeat" "$tsk_repeat"
 
     # If no files or directories were specified, run all files in the cwd.
     if [ ${#arguments[@]} -eq 0 ]; then
@@ -705,7 +713,7 @@ _prepare_test_environment() {
 
     tsk_keep_artifacts=''
     tsk_use_diff=''
-    tsk_match_utility='cat'
+    tsk_match_utility='cat' # TODO: accepting code from user: make sure this isn't a vuln!
 
     # TODO: running in /tmp isn't good for tests that require giant files
     # TODO: option to create and mount a ramdisk to run tests
@@ -758,38 +766,52 @@ _run_multiple_testfiles() {
     wait  # wait for the remaining jobs to finish
 }
 
-# there are many ways to run the tests:
-# - Run multiple test files: ./run-tests file1.test file2.test
-# - Run a single test file: ./01-my-tests.test
-# - You should also be able to run multiple tests: ./01-a.test 02-b.test
-# - if you name a directory, all tests in that directory will be run.
-# - if you don't name any directories or files, the cwd will be searched for tests.
+_run_tests() {
+    if [ "$tsk_benchmark_enabled" = true ]; then
+        tsk_benchmark_start_time=$(date +%s%N)  # epoch seconds + nanoseconds
+    fi
+
+    # if the user supplies a single testfile, we show a more verbose output than if they're running multiple
+    if [ ${#testfiles[@]} -eq 1 ]; then
+        tsk_test_formatter="${tsk_test_formatter:-list}"
+        _run_testfile_tests "${testfiles[0]}"
+    else
+        # TODO: need to print failures and results when running multiple test files
+        tsk_test_formatter="${tsk_test_formatter:-dot}"
+        _run_multiple_testfiles
+    fi
+
+    _${tsk_test_formatter}_formatter_test_summary
+
+    if [ "$tsk_benchmark_enabled" = true ] && [ -n "$tsk_benchmark_total_time" ]; then
+        elapsed_ms=$(( ($(date +%s%N) - tsk_benchmark_start_time) / 1000000 ))
+        tsk_benchmark_total_time=$(printf "%d.%03d" $((elapsed_ms / 1000)) $((elapsed_ms % 1000)))
+        echo -e "${GREEN}Running${NC} ${#testfiles[@]} ${GREEN}$(pluralize ${#testfiles[@]} testfile) took${NC} ${tsk_benchmark_total_time} ${GREEN}seconds${NC}"
+    fi
+}
+
+# TODO: if we're benchmarking, can we summarize the results?
+_repeat_tests() {
+    # If tsk_repeat is not set or is empty, run tests once
+    if [ -z "$tsk_repeat" ]; then
+        tsk_repeat=1
+    fi
+
+    while [ "$tsk_repeat" -gt 0 ]; do
+        ( _run_tests )
+        local exit_code="$?"
+        if [ "$exit_code" -ne 0 ]; then
+            exit "$exit_code"
+        fi
+        tsk_repeat=$((tsk_repeat - 1))
+    done
+}
 
 _prepare_test_environment
 _process_arguments "$@"
+_repeat_tests
 
-# Start benchmark timer if enabled (after arguments are processed)
-if [ "$tsk_benchmark_enabled" = true ]; then
-    tsk_benchmark_start_time=$(date +%s%N)  # epoch seconds + nanoseconds
-fi
-
-# if the user supplies a single testfile, we show a more verbose output than if they're running multiple
-if [ ${#testfiles[@]} -eq 1 ]; then
-    tsk_test_formatter="${tsk_test_formatter:-list}"
-    _run_testfile_tests "${testfiles[0]}"
-else
-    # TODO: need to print failures and results when running multiple test files
-    tsk_test_formatter="${tsk_test_formatter:-dot}"
-    _run_multiple_testfiles
-fi
-
-_${tsk_test_formatter}_formatter_test_summary
+# Clean up if not in watch mode and not keeping artifacts
 if [ "$tsk_keep_artifacts" != true ]; then
     rm -rf "$tsk_root_dir"
-fi
-
-if [ "$tsk_benchmark_enabled" = true ] && [ -n "$tsk_benchmark_total_time" ]; then
-    elapsed_ms=$(( ($(date +%s%N) - tsk_benchmark_start_time) / 1000000 ))
-    tsk_benchmark_total_time=$(printf "%d.%03d" $((elapsed_ms / 1000)) $((elapsed_ms % 1000)))
-    echo -e "${GREEN}Running${NC} ${#testfiles[@]} ${GREEN}$(pluralize ${#testfiles[@]} testfile) took${NC} ${tsk_benchmark_total_time} ${GREEN}seconds${NC}"
 fi

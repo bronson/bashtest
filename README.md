@@ -20,9 +20,10 @@ This project was extracted from [Portkey](https://github.com/bronson/portkey).
 ### Running Tests
 
 ```bash
-./run-tests                   # Run all .test files recursively
+./run-tests                   # Run all .test files in current dir recursively
 ./run-tests t1.test t2.test   # Run specific test files
 ./run-tests dir               # Run all tests in a directory
+./t1.test                     # Run a single testfile directly
 ```
 
 ### Arguments

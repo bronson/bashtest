@@ -42,6 +42,7 @@ EOF
 
 # Multithreaded tests can appear in any order
 # So replaces, say, 'FF.s.s' with 'FFss..'
+# Right now it's hard-coded to only support six tests.
 fix_test_order() {
     sed 's/^[\.Fs]\{6\}$/FFss../'
 }
@@ -73,6 +74,38 @@ Running 1 testfile took XX.XX seconds
 EOL
 
     rm bench.test
+}
+
+test:repeat_works() {
+    echo 'test:quick() { is_eq 1 1; }' > repeat.test
+    $run_tests -r 3 repeat.test
+    stdout_is <<EOL
+ 01 pass   test:quick
+1 test: 1 passed, 0 failed.   1 assertion.
+ 01 pass   test:quick
+1 test: 1 passed, 0 failed.   1 assertion.
+ 01 pass   test:quick
+1 test: 1 passed, 0 failed.   1 assertion.
+EOL
+
+    rm repeat.test
+}
+
+test:repeat_zero_times() {
+    echo 'test:quick() { is_eq 1 1; }' > repeat.test
+    $run_tests -r 0 repeat.test
+    stdout_is <<EOL
+EOL
+    rm repeat.test
+}
+
+test:repeat_negative_one_times() {
+    echo 'test:quick() { is_eq 1 1; }' > repeat.test
+    $run_tests -r -1 repeat.test
+    stderr_is <<EOL
+invalid repeat argument: -1
+EOL
+    rm repeat.test
 }
 
 source "$(dirname "$BASH_SOURCE")/run-tests"
