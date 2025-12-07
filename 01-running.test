@@ -15,9 +15,9 @@ test:missing_testfiles() {
     echo 'echo WRONG >&2; exit 1' > existing.test
 
     # list missing.test last so we're sure it's tested before anything gets loaded
-    $run_tests existing.test missing.test
+    $run_tests existing.test missing.test | sed 's/line [0-9][0-9]*/line XXX/g'
     stdout_is <<EOF
- 00 ABORT   line 375: Could not find missing.test
+ 00 ABORT   line XXX: Could not find missing.test
 TEST ABORTED
 EOF
 }

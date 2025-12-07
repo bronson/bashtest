@@ -86,7 +86,7 @@ tsk_orig_cwd="$(pwd)"     # save the directory we were started in
 tsk_framework_file="$(readlink -f "${BASH_SOURCE[0]}")"
 
 # if config files exclude any directories, they're stored here until argumets are processed
-tsk_exclude_dirs=()
+tsk_excluded_dirs=()
 
 # if the user ran a testfile directly (`./01.test`), tsk_launched_file will be that file
 tsk_launched_file=""
@@ -304,7 +304,7 @@ exclude_directory() {
     case "$1" in
         *[\*\?\[\]\\]*) abort "invalid filename: '$excluded_dir'" ;;
     esac
-    tsk_exclude_dirs+=("$1")
+    tsk_excluded_dirs+=("$1")
 }
 
 
@@ -314,8 +314,10 @@ exclude_directory() {
 
 _expand_directory() {
     local find_args=("$1")
+    local excluded_dir
+
     # prune any excluded directories
-    for excluded_dir in "${tsk_exclude_dirs[@]}"; do
+    for excluded_dir in "${tsk_excluded_dirs[@]}"; do
         find_args+=("-path" "*/$excluded_dir" "-prune" "-o")
     done
     # match .test and .skip files
