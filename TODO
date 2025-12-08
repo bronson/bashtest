@@ -1,4 +1,70 @@
-rename it test-conf.sh so syntax highlighting works
+## TODO
+
+This file is a backlog of ideas. Here they are, in no particular order...
+
+---
+
+In the interest of explicit dependencies (see "should tests clean up after themselves"),
+we need to make it easier to embed files inside tests. Needs to be pretty, easy to edit,
+and syntax highlighted.
+
+Bash indented heredocs (<<-EOF) don't work because they need to be indented using tabs. That's
+not easy to edit.
+
+Good suggestions here: https://stackoverflow.com/questions/33815600/indenting-heredocs-with-spaces
+
+---
+
+The hardest question to answer so far is: "Should tests clean up after themselves?"
+
+First, let's consider two simpler questions:
+* Should tests always be run in random order?
+* Should tests be required to declare their dependencies?
+
+I think the answer to both of these is a clear "yes".   (if random test order leads to slow
+tests (say, due to bad cache usage), maybe there should be an escape hatch ... but a better
+solution would be to explicitly group tests that want to reuse the same cached data)
+
+Implicit dependencies might be the biggest cause of brittle code bases.
+If you can't move a chunk of code from one place to the other without breaking
+unknowable things in far places (because there were a lot of hidden dependencies),
+you have bad code.
+
+When Bashtest was first written, tests that didn't clean up after themselves would fail.
+That became irritating when the tests started using lots of files, so that requirement was
+relaxed. Tests can just slop up the directories and everything gets rm-rf'd at the end.
+
+This has led to the opposite extreme: now tests can accidentally rely on activity that
+happened far away.
+
+SO, the answer is to make sure that dependencies are explicit. If enough deps are explicit,
+then there's no problem with running tests in any order.
+
+And, if it's easy to write tests that clean up after themselves, then people won't even
+want to write code that leaves slop around. The problem might just be bad tools.
+
+SO: we need test helpers that make sure the files they create are cleaned up.
+And, if people want, they can add an after:all hook that will rm-rf after each
+test.
+
+I think it's time to enforce fastidious tests.
+
+---
+
+Depending on research, make it possible to use the after:each hook to either
+clean up after each test, or if cleanup is automatic, to fail if any tests leave
+files behind (in case the project wants to be more pedantic).
+
+---
+
+We need to have an option to run tests in random order to ensure order dependency
+isn't a thing..
+We should also make an option to force each test into its own subshell to verify
+that tests aren't relying on other tests.
+
+---
+
+The benchmark should always be enabled. It hardly adds any overhead.
 
 ---
 
@@ -19,12 +85,6 @@ number of before:each, before:all etc.
 
 Make sure before:all runs once before testfiles are forked, and before:each
 runs in each subshell, not affecting other subshells.
-
----
-
-Depending on research, make it possible to use the after:each hook to either
-clean up after each test, or if cleanup is automatic, to fail if any tests leave
-files behind (in case the project wants to be more pedantic).
 
 ---
 
@@ -169,14 +229,6 @@ We can't run each test in a subshell because that makes tests run 1000 times slo
 It takes even longer to give each test its own test directory
 than it does to run each test in its own subshell. We definitely
 should reuse test directories the way we do now.
-
----
-
-We need to have an option to run tests in random order to ensure order dependency
-isn't a thing..
-We should also make an option to force each test into its own subshell to verify
-that tests aren't relying on other tests.
-
 
 ---------
 

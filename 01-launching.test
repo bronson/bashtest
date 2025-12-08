@@ -4,19 +4,15 @@
 # Other command-line arguments are tested elsewhere.
 # Related: 07-skipping.test
 
-
 # TODO: test missing file or directory names on the command line
-# TODO: what about mocking run-tests so I don't need to $run_tests?
-    # (but only do this when I can do one mock for all tests)
 
-before:all() {
-    # this is a little more readable
-    run_tests="$tsk_framework_file"
+run_tests() {
+    "$tsk_framework_file" "$@"
 }
 
 test:run_one_testfile() {
     cd "$(framework_dir)/fixtures/numbered"
-    $run_tests one.test -f test
+    run_tests one.test -f test
     stdout_is <<EOF
 pass test:one
 EOF
@@ -25,7 +21,7 @@ EOF
 test:run_multiple_testfiles() {
     # tests and testfiles are run in indeterminate order so we need to sort the output
     cd "$(framework_dir)/fixtures/numbered"
-    $run_tests one.test ../lettered/b.test three.test --formatter=test | sort
+    run_tests one.test ../lettered/b.test three.test --formatter=test | sort
     stdout_is <<EOF
 pass test:b
 pass test:one
@@ -35,7 +31,7 @@ EOF
 
 test:run_without_args() {
     cd "$(framework_dir)/fixtures/lettered"
-    $run_tests -f test | sort
+    run_tests -f test | sort
     stdout_is <<EOF
 pass test:a
 pass test:b
@@ -45,7 +41,7 @@ EOF
 
 test:run_one_dir() {
     cd "$(framework_dir)/fixtures"
-    $run_tests numbered -f test | sort
+    run_tests numbered -f test | sort
     stdout_is <<EOF
 pass test:one
 pass test:three
@@ -55,7 +51,7 @@ EOF
 
 test:run_multiple_dirs() {
     cd "$(framework_dir)/fixtures"
-    $run_tests lettered numbered -f test | sort
+    run_tests lettered numbered -f test | sort
     stdout_is <<EOF
 pass test:a
 pass test:b
@@ -107,7 +103,7 @@ EOF
 }
 
 test:run_missing_testfiles() {
-    $run_tests no-existy.test -f test | sort
+    run_tests no-existy.test -f test | sort
     stdout_is <<EOF
 pass test:one
 pass test:three
@@ -118,7 +114,7 @@ EOF
 skip:run_empty_directory() {
     mkdir empty-dir
     # TODO: need to make testing exit code and output simpler
-    $run_tests empty-dir
+    run_tests empty-dir
     is_eq 120 $?
     stderr_is <<EOF
 No testfiles found. Testfile names must end in '.test'.
@@ -128,11 +124,12 @@ EOF
 skip:run_empty_directory_no_args() {
     mkdir empty-dir
     cd empty-dir
-    $run_tests
+    run_tests
     is_eq 120 $?
     stderr_is <<EOF
 No testfiles found. Testfile names must end in '.test'.
 EOF
+    rmdir empty-dir
 }
 
 test:launch_testfiles_and_dirs() {
@@ -161,13 +158,13 @@ EOF
 # test:keep() {
 # }
 
-# TODO: this test needs to run first until we get a handle on tests leaving files behind
-test:aa_subtest_directories() {
+test:subtest_directories() {
     # ensure there are no files in the cwd
+    # (and the test contract says there will be none)
     is_eq "" "$(ls -A)"
 
     cd "$(framework_dir)/fixtures/numbered"
-    $run_tests one.test -f test --keep
+    run_tests one.test -f test --keep
     stdout_is <<EOF
 pass test:one
 EOF
@@ -181,7 +178,7 @@ test:matching_option() {
     # Test that --matching filters tests correctly
     cd "$(framework_dir)"
     # runs the 3 testfiles, but only one test matches
-    $run_tests fixtures/lettered --matching="b" -f test | sort
+    run_tests fixtures/lettered --matching="b" -f test | sort
     stdout_is <<EOF
 pass test:b
 EOF
@@ -190,28 +187,31 @@ EOF
 test:matching_no_matches() {
     # returns empty if no test matches
     cd "$(framework_dir)"
-    $run_tests fixtures/lettered --matching="nonexistent" -f test
+    run_tests fixtures/lettered --matching="nonexistent" -f test
     stdout_is ""
 }
 
 test:diff_option() {
+    # TODO: use a file-creating function for this
     echo "test:fail_test() {" > failing.test
     echo "    is_eq 'expected' 'actual'" >> failing.test
     echo "}" >> failing.test
 
-    $run_tests failing.test -f test --diff
+    run_tests failing.test -f test --diff
     stdout_is <<EOF
 fail test:fail_test
   - line 2: is_eq diff:
     | -expected
     | +actual
 EOF
+
+    rm failing.test
 }
 
 # Test that a file named '-' can be run (since - no longer means stdin)
 test:run_file_named_dash() {
     echo "test:dash_test() { is_eq 1 1; }" > "-"
-    $run_tests "-" -f test
+    run_tests "-" -f test
     stdout_is <<EOF
 pass test:dash_test
 EOF

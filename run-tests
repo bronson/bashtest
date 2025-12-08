@@ -636,11 +636,11 @@ _compute_test_result() {
 _run_testfile_tests() {
     local tsk_testfile="$1"
 
+    # in case the user named a ".skip" file on the command line
     tsk_skip_all_tests=""
     if [[ "$tsk_testfile" == *.skip ]]; then
         tsk_skip_all_tests=true
     fi
-
 
     # load the testfile if it's not already loaded
     if [ "$tsk_testfile" != "$tsk_launched_file" ]; then
@@ -679,6 +679,7 @@ _run_testfile_tests() {
         tsk_test_result=""
         tsk_skip_test="$tsk_skip_all_tests"
 
+        cd "$tsk_root_dir/run"
         tsk_total_count=$((tsk_total_count + 1))
         "_${tsk_test_formatter}_formatter_pre_test"
         if [[ "$tsk_test_name" == test:* ]]; then
