@@ -4,9 +4,8 @@
 #   - test output
 #   - ??
 
-before:all() {
-    # this is a little more readable
-    run_tests="$tsk_framework_file"
+run_tests() {
+    "$tsk_framework_file" "$@"
 }
 
 # missing/invalid testfiles stop testing before any testfiles are loaded
@@ -15,7 +14,7 @@ test:missing_testfiles() {
     echo 'echo WRONG >&2; exit 1' > existing.test
 
     # list missing.test last so we're sure it's tested before anything gets loaded
-    $run_tests existing.test missing.test | sed 's/line [0-9][0-9]*/line XXX/g'
+    run_tests existing.test missing.test | sed 's/line [0-9][0-9]*/line XXX/g'
     # TODO: this error message needs to be improved. That line number makes no sense.
     stdout_is <<EOF
  00 ABORT  line XXX: Could not find missing.test
@@ -52,7 +51,7 @@ fix_test_order() {
 test:dot_formatter_test_results() {
     create_run_test
     # run it twice so we get the multithreaded dot formatter
-    $run_tests run.test run.test | fix_test_order
+    run_tests run.test run.test | fix_test_order
     stdout_is <<EOF
 FFss..
 Failed tests:
@@ -68,7 +67,7 @@ EOF
 test:benchmark_works() {
     echo 'test:quick() { is_eq 1 1; }' > bench.test
     # Run with benchmark and verify output contains benchmark timing
-    $run_tests -b bench.test -f test | sed 's/[0-9][0-9]*\.[0-9][0-9]*/XX.XX/g'
+    run_tests -b bench.test -f test | sed 's/[0-9][0-9]*\.[0-9][0-9]*/XX.XX/g'
     stdout_is <<EOL
 pass test:quick
 Running 1 testfile took XX.XX seconds
@@ -79,7 +78,7 @@ EOL
 
 test:repeat_works() {
     echo 'test:quick() { is_eq 1 1; }' > repeat.test
-    $run_tests -r 3 repeat.test
+    run_tests -r 3 repeat.test
     stdout_is <<EOL
  01 pass   test:quick
 1 test: 1 passed, 0 failed.   1 assertion.
@@ -94,7 +93,7 @@ EOL
 
 test:repeating_a_failing_test_works() {
     echo 'test:quick() { is_eq 1 2; }' > repeat.test
-    $run_tests -r 3 -f test repeat.test
+    run_tests -r 3 -f test repeat.test
     stdout_is <<EOL
 fail test:quick
   - line 1: is_eq expected '1', got '2'
@@ -108,7 +107,7 @@ EOL
 
 test:repeat_zero_times() {
     echo 'test:quick() { is_eq 1 1; }' > repeat.test
-    $run_tests -r 0 repeat.test
+    run_tests -r 0 repeat.test
     stdout_is <<EOL
 EOL
     rm repeat.test
@@ -116,7 +115,7 @@ EOL
 
 test:repeat_negative_one_times() {
     echo 'test:quick() { is_eq 1 1; }' > repeat.test
-    $run_tests -r -1 repeat.test
+    run_tests -r -1 repeat.test
     stderr_is <<EOL
 invalid repeat argument: -1
 EOL

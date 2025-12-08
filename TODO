@@ -15,6 +15,12 @@ Good suggestions here: https://stackoverflow.com/questions/33815600/indenting-he
 
 ---
 
+Make it an error when a test leaves any files in its rundir or cache dir.
+
+Then randomize the order of the tests, both files and tests in the file.
+
+---
+
 The hardest question to answer so far is: "Should tests clean up after themselves?"
 
 First, let's consider two simpler questions:

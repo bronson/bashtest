@@ -4,14 +4,9 @@
 #
 # TODO: before_all should be able to skip the entire testfile
 
-before:all() {
-    # this is a little more readable
-    run_tests="$tsk_framework_file"
-}
-
 
 # Make sure the config file gets loaded.
-# The test copies run-tests
+# The test copies run-tests so it will pick up our config file.
 
 test:config_file() {
     cp "$tsk_framework_file" ./run-tests
@@ -33,6 +28,7 @@ EOF
 test:config_file_abort() {
     cp "$tsk_framework_file" ./run-tests
     chmod +x ./run-tests
+
     echo "tsk_test_formatter=test" > test-config.sh
     echo "test:sample() { abort 'this worked'; }" > sample.test
 

@@ -2,9 +2,11 @@
 
 # This testfile verifies the environment the tests are run in
 
-before:all() {
-    run_tests="$tsk_framework_file"
+
+run_tests() {
+    "$tsk_framework_file" "$@"
 }
+
 
 # every test must start in test_dir
 test:test_dir() {
@@ -21,7 +23,7 @@ test:test_dir_in_before_each() {
             is_eq "$(pwd)" "$(test_dir)"
         }
 EOF
-    $run_tests -f test | sort
+    run_tests -f test | sort
     stdout_is <<EOF
 pass test:working_dir
 EOF
@@ -32,8 +34,6 @@ EOF
 # it's fine for tests to change directories, but ensure that
 # the directory is restored properly when the next test is run
 skikp:directory_is_set_for_each_test() {
-    run_tests="$tsk_framework_file"
-
     cat > dir.test <<EOF
 test:1() {
 }
@@ -48,7 +48,7 @@ test:3() {
 }
 EOF
 
-    $run_tests - -f test <<EOF | sort
+    run_tests - -f test <<EOF | sort
 EOF
 }
 
