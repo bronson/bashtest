@@ -219,8 +219,8 @@ abort() {
     # TODO: could run all tests in a subshell that keeps testing until abort is called.
     # Abort exits the subshell and then the tests end normally.
     local errmsg="line $(_line_number): $1"
-    printf "${CR} %02d ${RED}ABORT${NC}  $tsk_test_name $errmsg\n" "$tsk_total_count" >&3
-    printf "${RED}TEST ABORTED${NC}\n" >&3
+    printf "${CR} %02d ${RED}ABORT${NC} $tsk_testfile $errmsg\n" "$tsk_total_count" >&3
+    printf "${RED}All testing aborted.${NC}\n" >&3
     exit 127
 }
 

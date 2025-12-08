@@ -36,11 +36,11 @@ test:config_file_abort() {
     echo "tsk_test_formatter=test" > test-config.sh
     echo "test:sample() { abort 'this worked'; }" > sample.test
 
-    ./run-tests
-    is_eq 127 $?
+    # TODO: there needs to be a better way to check the exit code
+    (./run-tests; is_eq 127 $?) | sed 's/ABORT .*sample.test/ABORT \/DIRS\/run\/sample.test/'
     stdout_is <<EOF
- 01 ABORT  test:sample line 1: this worked
-TEST ABORTED
+ 01 ABORT /DIRS/run/sample.test line 1: this worked
+All testing aborted.
 EOF
 
     rm run-tests test-config.sh sample.test

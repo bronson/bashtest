@@ -16,9 +16,10 @@ test:missing_testfiles() {
 
     # list missing.test last so we're sure it's tested before anything gets loaded
     $run_tests existing.test missing.test | sed 's/line [0-9][0-9]*/line XXX/g'
+    # TODO: this error message needs to be improved. That line number makes no sense.
     stdout_is <<EOF
- 00 ABORT   line XXX: Could not find missing.test
-TEST ABORTED
+ 00 ABORT  line XXX: Could not find missing.test
+All testing aborted.
 EOF
 }
 
