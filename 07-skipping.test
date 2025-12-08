@@ -69,6 +69,7 @@ skip skip:skipped
 skip test:no_asserts
 skip test:nop
 EOF
+    rm test.skip
 }
 
 # ensure we skip files even if they're named on the command line
@@ -81,6 +82,7 @@ skip skip:skipped
 skip test:no_asserts
 skip test:nop
 EOF
+    rm miss-me.skip
 }
 
 test:skip_in_before_all() {

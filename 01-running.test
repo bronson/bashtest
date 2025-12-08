@@ -91,6 +91,20 @@ EOL
     rm repeat.test
 }
 
+test:repeating_a_failing_test_works() {
+    echo 'test:quick() { is_eq 1 2; }' > repeat.test
+    $run_tests -r 3 -f test repeat.test
+    stdout_is <<EOL
+fail test:quick
+  - line 1: is_eq expected '1', got '2'
+fail test:quick
+  - line 1: is_eq expected '1', got '2'
+fail test:quick
+  - line 1: is_eq expected '1', got '2'
+EOL
+    rm repeat.test
+}
+
 test:repeat_zero_times() {
     echo 'test:quick() { is_eq 1 1; }' > repeat.test
     $run_tests -r 0 repeat.test
