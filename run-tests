@@ -596,7 +596,7 @@ _run_test() {
     if type before:each &>/dev/null; then
         before:each "$tsk_test_name"
     fi
-    [ -n "$tsk_skip_test" ] && return
+    [ -n "$tsk_skip_test" ] && return   # skip message is already printed
 
     "$tsk_test_name" "$tsk_test_name"   # TODO: useful arguments?
     if type after:each &>/dev/null; then
@@ -732,7 +732,7 @@ _prepare_test_environment() {
 }
 
 # given a testfile, ensure we return a unique name for this test
-# even if other testfiles have the same identical name
+# (even if other testfiles have the same identical name)
 _get_testfile_unique_dirname() {
     local testfile="$1"
     local filename="${testfile##*/}"     # remove leading directories
@@ -793,17 +793,17 @@ _run_tests() {
 
 # TODO: if we're benchmarking, can we summarize the results?
 _repeat_tests() {
-    # If tsk_repeat is not set or is empty, run tests once
-    if [ -z "$tsk_repeat" ]; then
-        tsk_repeat=1
-    fi
-
     while [ "$tsk_repeat" -gt 0 ]; do
         ( _run_tests )
         local exit_code="$?"
         if [ "$exit_code" -ne 0 ]; then
             exit "$exit_code"
         fi
+
+        # the fail-results and skip-results files get appended to
+        # so they must be cleared before anything is repeated
+        rm -f "$tsk_root_dir"/*/*-results
+
         tsk_repeat=$((tsk_repeat - 1))
     done
 }
