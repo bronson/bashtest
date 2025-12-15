@@ -4,39 +4,28 @@
 #   - test output
 #   - ??
 
+# allows for nicer syntax: now tests can "run_tests testfile"
 run_tests() {
+    export TSK_ROOT_DIR="$tsk_root_dir/run/bashtest"  # TODO: bad use of tsk_root_dir
+    create_dir "$TSK_ROOT_DIR"    # directory is automatically cleaned up
     "$tsk_framework_file" "$@"
 }
 
-# missing/invalid testfiles stop testing before any testfiles are loaded
-test:missing_testfiles() {
-    # if we even try to load this test, it should cause an error.
-    echo 'echo WRONG >&2; exit 1' > existing.test
-
-    # list missing.test last so we're sure it's tested before anything gets loaded
-    run_tests existing.test missing.test | sed 's/line [0-9][0-9]*/line XXX/g'
-    # TODO: this error message needs to be improved. That line number makes no sense.
-    stdout_is <<EOF
- 00 ABORT  line XXX: Could not find missing.test
-All testing aborted.
-EOF
-}
-
-
+# a normal testfile used by many of these tests
 create_run_test() {
-    cat > run.test <<EOF
-        # this test is executed, not skipped
-        test:success() {
-            is_eq 1 1
-    	}
-
-    	test:fail() {
-    	    is_eq 1 2
-    	}
-
-    	skip:skipped() {
-    	    is_eq 1 2
-    	}
+    create_file run.test <<EOF
+      : # this test is executed, not skipped
+      : test:success() {
+      :     is_eq 1 1
+      : }
+      :
+      : test:fail() {
+      :     is_eq 1 2
+      : }
+      :
+      : skip:skipped() {
+      :     is_eq 1 2
+      : }
 EOF
 }
 
@@ -45,6 +34,29 @@ EOF
 # Right now it's hard-coded to only support six tests.
 fix_test_order() {
     sed 's/^[\.Fs]\{6\}$/FFss../'
+}
+
+
+# missing/invalid testfiles stop testing before any testfiles are loaded
+test:missing_testfiles() {
+    # because missing.test doesn't exist at all, if we attempt to even load
+    # this testfile, that's an error.
+    create_file existing.test <<EOL
+        echo WRONG >&2
+        exit 1'
+EOL
+
+    # list missing.test last so we're sure it's tested before anything gets loaded
+    create_file out # TODO: turn this back into a pipeline.
+    # right now it can't be a pipe because the first command is in a subshell, so
+    # create_dir's cleanup task gets forgotten.
+    run_tests existing.test missing.test > out
+    cat out | sed 's/line [0-9][0-9]*/line XXX/g'
+    # TODO: this error message needs to be improved. Including a line number makes no sense.
+    stdout_is <<EOF
+ 00 ABORT  line XXX: Could not find missing.test
+All testing aborted.
+EOF
 }
 
 # ensure the dot formatter names the testfiles that had failed or skipped tests

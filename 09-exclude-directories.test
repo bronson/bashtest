@@ -3,6 +3,8 @@
 # Test excluding directories functionality
 
 run_tests() {
+    export TSK_ROOT_DIR="$tsk_root_dir/run/bashtest"  # TODO: bad use of tsk_root_dir
+    [ -d "$TSK_ROOT_DIR" ] || create_dir "$TSK_ROOT_DIR"    # directory is automatically cleaned up
     "$tsk_framework_file" "$@"
 }
 
@@ -10,16 +12,21 @@ run_tests() {
 # Excluding via config file is tested in `config-file.test`.
 
 create_exclude_fixtures() {
-    mkdir -p testdir/testures
+    create_dir testdir
+    create_dir testdir/testures
+    create_file testdir/testures/fixture.test
     echo 'test:fixture() { is_eq 1 1; }' > testdir/testures/fixture.test
-    mkdir -p testdir/src
+    create_dir testdir/src
+    create_file testdir/src/real.test
     echo 'test:real() { is_eq 1 1; }' > testdir/src/real.test
 }
 
 test:exclude_via_command_line() {
     create_exclude_fixtures
     echo 'First run without excluding, should find both files:'
-    run_tests -f test testdir | sort
+    create_file out
+    run_tests -f test testdir > out
+    cat out | sort
     echo
     echo 'Then run with excluding, should find only real.test:'
     run_tests -f test --exclude testures testdir
@@ -32,7 +39,6 @@ pass test:real
 Then run with excluding, should find only real.test:
 pass test:real
 EOF
-    rm -rf testdir
 }
 
 test:exclude_multiple_directories() {
@@ -96,7 +102,8 @@ EOF
 
 # test what happens if the user excludes a dir and also names that dir on the command line
 test:exclude_and_include_simultaneously() {
-    mkdir -p testures
+    create_dir testures
+    create_file testures/fixture.test
     echo 'test:fixture() { is_eq 1 1; }' > testures/fixture.test
 
     run_tests testures -f test -e testures

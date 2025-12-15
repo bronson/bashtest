@@ -7,6 +7,8 @@
 # TODO: test missing file or directory names on the command line
 
 run_tests() {
+    export TSK_ROOT_DIR="$tsk_root_dir/run/bashtest"  # TODO: bad use of tsk_root_dir
+    create_dir "$TSK_ROOT_DIR"    # directory is automatically cleaned up
     "$tsk_framework_file" "$@"
 }
 

@@ -4,6 +4,8 @@
 
 
 run_tests() {
+    export TSK_ROOT_DIR="$tsk_root_dir/run/bashtest"  # TODO: bad use of tsk_root_dir
+    create_dir "$TSK_ROOT_DIR"    # directory is automatically cleaned up
     "$tsk_framework_file" "$@"
 }
 
@@ -15,13 +17,13 @@ test:test_dir() {
 
 # the before:each hook must start in test_dir
 test:test_dir_in_before_each() {
-    cat > dir.test <<'EOF'
-        before:each() {
-            is_eq "$(pwd)" "$(test_dir)"
-        }
-        test:working_dir() {
-            is_eq "$(pwd)" "$(test_dir)"
-        }
+    create_file dir.test <<'EOF'
+      : before:each() {
+      :     is_eq "$(pwd)" "$(test_dir)"
+      : }
+      : test:working_dir() {
+      :     is_eq "$(pwd)" "$(test_dir)"
+      : }
 EOF
     run_tests -f test | sort
     stdout_is <<EOF

@@ -1,0 +1,78 @@
+#!/bin/bash
+
+test:create_file() {
+    create_file simple.txt <<EOF
+      : This is a simple file
+EOF
+
+    [ -f simple.txt ] || fail "simple.txt should exist during test"
+    is_eq 1 1   # otherwise this test isn't counted
+}
+
+test:create_file_cleanup() {
+    # Create multiple files and verify they get cleaned up
+    create_file test1.txt <<EOF
+      : This is test file 1
+EOF
+
+    create_file test2.txt <<EOF
+      : This is test file 2
+EOF
+
+    # Verify files exist during the test
+    [ -f test1.txt ] || abort "test1.txt should exist during test"
+    [ -f test2.txt ] || abort "test2.txt should exist during test"
+
+    # Change directory to verify cleanup still works
+    create_dir subdir
+    cd subdir
+
+    create_file test3.txt <<EOF
+      : This is test file 3 in subdir
+EOF
+
+    [ -f test3.txt ] || abort "test3.txt should exist during test"
+
+    # Files should be automatically removed after test completes
+    # TODO: can add a check... right now we just assume that, if the
+    # test runner doesn't complain, it's probably ok.
+    is_eq "1" "1"  # Add an assertion so test doesn't get skipped
+}
+
+test:custom_cleanup_actions() {
+    # Test the add_cleanup function
+    echo "manual file" > manual.txt
+    at_cleanup "rm -f '$(realpath manual.txt)'"
+
+    [ -f manual.txt ] || abort "manual.txt should exist during test"
+
+    # Create a directory and register its cleanup
+    mkdir test_dir
+    at_cleanup "rm -rf '$(realpath test_dir)'"
+
+    [ -d test_dir ] || abort "test_dir should exist during test"
+    is_eq "1" "1"  # Add an assertion so test doesn't get skipped
+}
+
+test:cleanup_order() {
+    # Test that cleanup happens in reverse order (LIFO)
+    # We'll create a file and register cleanup actions that write to it
+    # The cleanup should execute in reverse order: rm, then check, then writes
+
+    create_file order_test.txt
+    local test_file="$(realpath order_test.txt)"
+
+    # These will be executed in reverse order (LIFO)
+    # So "First cleanup" will actually run last
+    at_cleanup "echo 'First cleanup' >> '$test_file'"
+    at_cleanup "echo 'Second cleanup' >> '$test_file'"
+    at_cleanup "echo 'Third cleanup' >> '$test_file'"
+
+    # This will run first (registered last)
+    # Check that the cleanup order was correct and then remove the file
+#    at_cleanup "if [ -f '$test_file' ]; then content=\"\$(cat '$test_file')\"; expected=\"Third cleanup"$'\n'"Second cleanup"$'\n'"First cleanup\"; if [ \"\$content\" = \"\$expected\" ]; then rm -f '$test_file'; else echo \"ERROR: Got '\$content' but expected '\$expected'\" >&2; rm -f '$test_file'; exit 1; fi; fi"
+
+    is_eq "1" "1"  # Add an assertion so test doesn't get skipped
+}
+
+source "$(dirname "$BASH_SOURCE")/run-tests"

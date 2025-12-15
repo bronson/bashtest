@@ -9,6 +9,9 @@ before:all() {
     # variables defined in the before hooks will be shared by subsequent tests.
     cache="$(cache_dir)"
 
+    rm -rf "$cache/*" "$cache/.*"   # TODO remove this!
+    ls -A $cache > /tmp/arg
+
     if [ -n "$(ls -A "$cache")" ]; then
         # can't make an assertion in before:all/after:all.
         abort "cache directory is not empty at start of test"

@@ -1,5 +1,11 @@
 #!/bin/bash
 
+run_tests() {
+    export TSK_ROOT_DIR="$tsk_root_dir/run/bashtest"  # TODO: bad use of tsk_root_dir
+    create_dir "$TSK_ROOT_DIR"    # directory is automatically cleaned up
+    "$tsk_framework_file" "$@"
+}
+
 test:run_passing_test() {
     # TODO: these lines should be moved into a test environment tester
     if [ -z "$tsk_framework_file" ]; then
@@ -9,8 +15,9 @@ test:run_passing_test() {
         abort "Framework not found at '$tsk_framework_file'"
     fi
 
+    create_file temp_test.test
     echo "test:run_test() { is_eq 1 1; }" > temp_test.test
-    bash $tsk_framework_file temp_test.test
+    run_tests temp_test.test
     stdout_is <<EOL
  01 pass   test:run_test
 1 test: 1 passed, 0 failed.   1 assertion.
@@ -18,8 +25,9 @@ EOL
 }
 
 test:run_failing_test() {
-    echo "test:run_test() { is_eq 1 2; }" > temp_failing.test
-    bash $tsk_framework_file temp_failing.test
+    create_file temp_failing.test   # TODO: this needs fixing
+    echo "test:run_test() { is_eq 1 2; }"  > temp_failing.test
+    run_tests temp_failing.test
     stdout_is <<EOL
  01 FAIL   test:run_test (1 error)
   - line 1: is_eq expected '1', got '2'
@@ -33,14 +41,14 @@ EOL
 # This is NOT so tests can depend on each other!
 # TODO: I think we just need to settle for tests running in alphabetical order.
 test:run_tests_in_order() {
-    cat > temp_order.test <<EOL
+    create_file temp_order.test <<EOL
 test:one() { is_eq 1 1; }
 test:two() { is_eq 2 2; }
 test:three() { is_eq 3 3; }
 test:four() { is_eq 4 4; }
 source "$tsk_framework_file"
 EOL
-    bash $tsk_framework_file temp_order.test
+    run_tests temp_order.test
     stdout_is <<EOL
  01 pass   test:four
  02 pass   test:one

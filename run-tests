@@ -224,6 +224,19 @@ abort() {
     exit 127
 }
 
+# Fails the test with the given message. NOTE: does not stop the test!
+# Bash can't leap up the stack without invoking slow subshells.
+#
+# Example:
+#     if [ ! -f myfile ]; then
+#         fail "myfile must exist during test"
+#         return
+#     fi
+
+fail() {    # TODO: test me!
+    _add_error "line $(_line_number): $1"
+}
+
 mock() {
     local command="$1"
     local behavior="$2"
@@ -287,6 +300,7 @@ skip() {
     tsk_skip_test=true
 }
 
+
 pluralize() {
     local count=$1
     local singular=$2
@@ -299,8 +313,62 @@ pluralize() {
     fi
 }
 
-# Prevents the given directories from automatically being included in test runs.
-# (excluded tests can still be run by naming them explicitly on the command line)
+
+# Returns TRUE if the given directory is empty, FALSE if not.
+# Example: `is_empty $mydir || echo "$mydir is not empty"`
+# see research/creating-files/benchmark_test-empty for notes on this implementation
+is_empty() {
+    # -G generates filenames matching the pattern
+    compgen -G "$1/*" >/dev/null 2>&1 && return 1
+    compgen -G "$1/.[!.]*" >/dev/null 2>&1 && return 1
+    compgen -G "$1/.??*" >/dev/null 2>&1 && return 1
+    return 0
+}
+
+
+# Creates a file in the current directory. Will be removed when the test finishes.
+# Colon and whitespace at the beginning of the line are removed. This allows you
+# to intend the file in your source code, and strip the indentation when it's used.
+#
+# Example: `create_file my_file.txt <<EOF`
+#     : This code will stay indented:
+#     :      something() {
+#     :          echo it works yo
+#     :      }
+# EOF
+
+create_file() {
+    if [ ! -t 0 ]; then    # prevent hanging if no input supplied
+        cat | sed 's/^[ \t]*: //'
+    fi > "$1"
+    at_cleanup "rm -f '$(realpath "$1")'"   # use absolute dir when cleaning up
+}
+
+# creates a directory that gets cleaned up when the test finishes.
+# TODO: this function sucks. It doesn't even support -p.
+create_dir() {
+    mkdir "$1"    # can't use -p because when `rm $1` only the subdir would be removed.
+    at_cleanup "rm -rf '$(realpath "$1")'"   # use absolute dir when cleaning up
+}
+
+# Add a custom cleanup action to be executed when the test finishes.
+# Note that tests can change directories, so the cleanup action should
+# be very careful what it relies upon.
+at_cleanup() {
+    tsk_cleanup_actions+=("$1")
+}
+
+# Execute all registered cleanup actions in reverse order (LIFO)
+_run_cleanup() {
+    local i
+    for ((i=${#tsk_cleanup_actions[@]}-1; i>=0; i--)); do
+        eval "${tsk_cleanup_actions[i]}" 2>/dev/null || true
+    done
+}
+
+
+# Prevents the given testfiles and directories from automatically being included in test runs.
+# (excluded files/dirs can still be run by naming them explicitly on the command line)
 exclude_directory() {
     case "$1" in
         *[\*\?\[\]\\]*) abort "invalid filename: '$excluded_dir'" ;;
@@ -599,15 +667,21 @@ _run_test() {
     [ -n "$tsk_skip_test" ] && return   # skip message is already printed
 
     "$tsk_test_name" "$tsk_test_name"   # TODO: useful arguments?
+
     if type after:each &>/dev/null; then
         after:each "$tsk_test_name"
     fi
+    _run_cleanup
+    if ! is_empty "$tsk_root_dir/run"; then
+        _add_error "test left files/dirs behind: $(ls -A "$tsk_root_dir/run")"
+    fi
+
     exec 1>&3 2>&4 # restore asap so test framework errors aren't swallowed
 
     # Add this test's assertions to the total
     tsk_total_assertions=$((tsk_total_assertions + tsk_test_assertions))
 
-    _cleanup_mocks
+    is_empty "$tsk_root_dir/test-mocks" || _cleanup_mocks
 
     if [ -s "$tsk_root_dir/test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
         _add_error_with_stderr "test produced stderr:"
@@ -655,8 +729,8 @@ _run_testfile_tests() {
         source "$tsk_testfile"
     fi
 
+    rm -rf "$tsk_root_dir/cache"
     mkdir -p "$tsk_root_dir/run" "$tsk_root_dir/cache" 2>&4 || exit 1
-    export TSK_ROOT_DIR="$tsk_root_dir/run/bashtest"
     cd "$tsk_root_dir/run"
 
     # Run the before:all hook if defined
@@ -678,6 +752,7 @@ _run_testfile_tests() {
         tsk_stderr_checked=false
         tsk_test_result=""
         tsk_skip_test="$tsk_skip_all_tests"
+        tsk_cleanup_actions=()
 
         cd "$tsk_root_dir/run"
         tsk_total_count=$((tsk_total_count + 1))

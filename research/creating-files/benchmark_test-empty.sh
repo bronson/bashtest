@@ -34,6 +34,8 @@
 # `if is_empty(/tmp/mydir); then`  or `is_empty ~/dir && fill_dir` work,
 # is_empty returns 0 if the directory is empty and 1 if it has items in it.
 #
+# Some of these techniques come from https://superuser.com/questions/352289/bash-scripting-test-for-empty-directory
+# Too bad Superuser prevents me from leaving a comment there even though I have 101 reputation.
 
 if [ $# -ne 2 ]; then
     echo "Usage: $0 <directory> <repetitions>"

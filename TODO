@@ -4,6 +4,12 @@ This file is a backlog of ideas. Here they are, in no particular order...
 
 ---
 
+Two most important changes now that it's clear that requiring tests to clean up after themselves is too overbearing:
+- make it so tests don't need to clean up (and add a test for cleaning upwrite-protected files)
+- make it so tests don't need to use a framework assert to be considered a pass. No error? Pass.
+
+---
+
 In the interest of explicit dependencies (see "should tests clean up after themselves"),
 we need to make it easier to embed files inside tests. Needs to be pretty, easy to edit,
 and syntax highlighted.
@@ -18,6 +24,49 @@ Good suggestions here: https://stackoverflow.com/questions/33815600/indenting-he
 1. Add pretty heredocs and helpers to create files (with automatic cleanup).
 2. Make it an error when a test leaves any files in its rundir or cache dir.
 3. Then randomize the order of the tests, both files and tests in the file.
+
+---
+
+I think I should remove the cache dir? It's an antipattern, and encourages people to use it
+in places they probably shouldn't. If someone really needs it, they
+can create something like it on their own using the before and after hooks.
+
+---
+
+I really really want to make the skip and fail functions stop execution immediately,
+much like abort.
+
+Yes, I think any test should only be able to fail once (unless you pass an arg or
+set something that allows multiple failures). Getting 12 error messages for one
+mistake is hardly ever helpful.
+
+Implementation: run all tests inside a single subshell. If any of the tests
+abort, skip, or fail, they exit. The parent handles the issue and, if it's not
+a fail, resumes the testing with the next test.
+
+---
+
+It's becoming clear that people should be able to write tests with their own assertions.
+
+For example, this seems like a perfectly good test:
+
+test:simple() {
+    echo content | create_file test1.txt
+    [ -f test1.txt ] || abort "test1.txt must be created."
+}
+
+But the test runner thinks that test was skipped! No built-in assertions were made,
+so nothing happened, right?  (wrong.)
+
+We should count tests that made zero assertions as having been run, not as having
+been skipped.
+
+That's fair, because I don't want to force someone to understand our esoteric API
+to write a simple test. They should be able to sit down and start writing Bash
+and produce something that works.
+
+AND IF ALL THIS IS TRUE, then we should probably remove the assertion counter too.
+That's going to be seriously misleading when people are doing their own assertions.
 
 ---
 
@@ -71,6 +120,10 @@ that tests aren't relying on other tests.
 ---
 
 The benchmark should always be enabled. It hardly adds any overhead.
+
+(or should it? Sometimes computers are 2X slower for no good reason, just some
+temporary indexing or something, and I don't want users to panic over nonissues.
+Often less information is more.)
 
 ---
 

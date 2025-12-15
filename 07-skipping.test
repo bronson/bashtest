@@ -5,11 +5,13 @@
 # TODO: before_all should be able to skip the entire testfile
 
 run_tests() {
+    export TSK_ROOT_DIR="$tsk_root_dir/run/bashtest"  # TODO: bad use of tsk_root_dir
+    create_dir "$TSK_ROOT_DIR"    # directory is automatically cleaned up
     "$tsk_framework_file" "$@"
 }
 
 create_skip_test() {
-    cat > skip.test <<EOF
+    create_file skip.test <<EOF
         # this test is executed, not skipped
         test:nop() {
             is_eq 1 1
@@ -33,7 +35,9 @@ EOF
 # verify the actual output from the command, don't use the test formatter
 test:skip_functions() {
     create_skip_test
-    run_tests skip.test | sort
+    create_file out   # TODO: this needs fixing
+    run_tests skip.test > out
+    cat out | sort
     stdout_is <<EOF
  01 skip   test:no_asserts
  02 pass   test:nop
@@ -44,7 +48,7 @@ EOF
 
 # test the dot formatter instead of the list formatter above
 test:skip_functions_multithread() {
-    cat > skip.test <<EOF
+    create_file skip.test <<EOF
         skip:nop() {
             is_eq 1 1
     	}
@@ -62,7 +66,9 @@ EOF
 test:skip_file() {
     create_skip_test
     mv skip.test test.skip
-    run_tests -f test | sort
+    create_file out
+    run_tests -f test > out
+    cat out | sort
     stdout_is <<EOF
 skip skip:skipped
 skip test:no_asserts
@@ -75,7 +81,9 @@ EOF
 test:skip_named_file() {
     create_skip_test
     mv skip.test miss-me.skip
-    run_tests miss-me.skip -f test | sort
+    create_file out
+    run_tests miss-me.skip -f test > out
+    cat out | sort
     stdout_is <<EOF
 skip skip:skipped
 skip test:no_asserts
@@ -85,7 +93,7 @@ EOF
 }
 
 test:skip_in_before_all() {
-    cat > skip.test <<EOF
+    create_file skip.test <<EOF
         # the before hook causes this test to be skipped
         test:nop() {
             is_eq 1 1
@@ -100,15 +108,16 @@ test:skip_in_before_all() {
             exit 1
         }
 EOF
-
-    run_tests skip.test -f test | sort
+    create_file out
+    run_tests skip.test -f test > out
+    cat out | sort
     stdout_is <<EOF
 skip test:nop
 EOF
 }
 
 test:skip_in_before_each() {
-    cat > skip.test <<EOF
+    create_file skip.test <<EOF
         # the before hook causes this test to be skipped
         test:nop() {
             is_eq 1 1
@@ -118,22 +127,24 @@ test:skip_in_before_each() {
              skip
         }
 EOF
-
-    run_tests skip.test -f test | sort
+    create_file out
+    run_tests skip.test -f test > out
+    cat out | sort
     stdout_is <<EOF
 skip test:nop
 EOF
 }
 
 test:skip_in_test() {
-    cat > skip.test <<EOF
+    create_file skip.test <<EOF
         test:not_happening() {
             skip; return
             is_eq 1 1
     	}
 EOF
-
-    run_tests skip.test -f test | sort
+    create_file out
+    run_tests skip.test -f test > out
+    cat out | sort
     stdout_is <<EOF
 skip test:not_happening
 EOF

@@ -8,6 +8,11 @@ test:expected_error() {
     _expect_error "line nnn: is_eq expected 'apple', got 'orange'"
 }
 
+# TODO: find a better way of cleaning up
+after:each() {
+    rm -f scratchfile test.test
+}
+
 test:is_eq()
 {
     is_eq "hello" "hello"
