@@ -22,14 +22,8 @@ Good suggestions here: https://stackoverflow.com/questions/33815600/indenting-he
 ---
 
 1. Add pretty heredocs and helpers to create files (with automatic cleanup).
-2. Make it an error when a test leaves any files in its rundir or cache dir.
+2. Make it an error when a test leaves any files in its rundir
 3. Then randomize the order of the tests, both files and tests in the file.
-
----
-
-I think I should remove the cache dir? It's an antipattern, and encourages people to use it
-in places they probably shouldn't. If someone really needs it, they
-can create something like it on their own using the before and after hooks.
 
 ---
 
@@ -127,6 +121,10 @@ Often less information is more.)
 
 ---
 
+file_is is _awful_... needs a ground-up rework.
+
+---
+
 maybe subtests need a stronger solution, where they run a different
 ./run-tests executable from the global one, so they get a different config
 file too. Or some other way of clearing the config file?
@@ -201,6 +199,8 @@ and that if a previous test cd'd, the next test still starts in the rundir.
 
 mocking in before:all will apply to every test
 
+Allow mocking in before:all
+
 ---
 
 BENCHMARK
@@ -224,17 +224,11 @@ or both? What's the best way to skip?
 
 ---
 
-Allow mocking in before:all
-
----
+Get rid of expect_error
 
 does it make sense to have expect_error? Should probably just run
 the test in a sub-run-tests and expect the result.
 ANSWER: I think no, it doesn't make sense.
-
----
-
-run all tests under -e by default?
 
 ---
 
@@ -270,16 +264,28 @@ Should run all tests in parallel, even inside a single test file. Creating
 and destorying directories is so fast, there's no point to doing things
 serially.
 
+UPDATE: except subshells take time. This will need some research.
+
 ---
 
 ensure the test directory is chmod 700 so attackers can't access in-progress tests
 
+
+## Done
+
+I think I should remove the cache dir? It's an antipattern, and encourages people to use it
+in places they probably shouldn't. If someone really needs it, they
+can create something like it on their own using the before and after hooks.
+
 ---
 
-What about the brief amount of time when the computer is starting up where the service might be exposed but not protected by iptables yet?
+Add before:each, before:all, after:each, after:all
 
-We need to be 100% sure we sequence the startup so there's no chance of accessing the live service without iptables over it. There's the chance an attacker might open a connection in that tiny sliver of time.  (even if they do, the connection will just stall when the portkey protections go into place, right? So, short of an APT situation where they can control your power and restart your computer over and over until they find their way in, it's not THAT big a deal?)
+---
 
+Should probably only preserve test results when running a single file or
+a single test. If running all tests, don't pollute the directory.
+Hope the test harness printed enough to solve the issue anyway.
 
 ---
 
@@ -289,15 +295,10 @@ It takes even longer to give each test its own test directory
 than it does to run each test in its own subshell. We definitely
 should reuse test directories the way we do now.
 
----------
+---
 
+run all tests under -e by default?
 
-Testing:
-
-Should probably only preserve test results when running a single file or
-a single test. If running all tests, don't pollute the directory.
-Hope the test harness printed enough to solve the issue anyway.
-
-
-
-Add before:each, before:all, after:each, after:all
+ANSWER: NO. It's not idiomatic bash. The principle of least surprise
+is important, and there's a reason Bash is on version 5 and doesn't
+run as -e by default.

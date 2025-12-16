@@ -43,10 +43,6 @@
 #: - framework_dir: The directory containing the run-tests script.
 #:   If you have a helper script in the same directory as the run-tests
 #:   script, you can include it like this: `$(framework_dir)/helper.sh`
-#: - cache_dir: A temporary directory that is created when tests start
-#:   and removed when tests complete successfully. This directory is shared
-#:   across all tests and can be used for caching data between test runs.
-#:   Access it like this: `$(cache_dir)/my-data.txt`
 #:
 #: ### Lifecycle Hooks
 #:
@@ -278,16 +274,11 @@ framework_dir() {
     dirname "$tsk_framework_file"
 }
 
-# returns the directory that every test starts in (unless before:each changes it)
+# returns the directory that every test starts in (unless before:each changes it?)
+# TODO: would there be a big speedup if these were variables instead of functions?
 test_dir() {
     echo "$tsk_root_dir/run"
 }
-
-# Returns the shared cache directory that is available to all tests in the current testfile
-cache_dir() {
-    echo "$tsk_root_dir/cache"
-}
-
 
 # call this when writing tests to dump its arguments immediately to the screen
 debug() {
@@ -729,8 +720,7 @@ _run_testfile_tests() {
         source "$tsk_testfile"
     fi
 
-    rm -rf "$tsk_root_dir/cache"
-    mkdir -p "$tsk_root_dir/run" "$tsk_root_dir/cache" 2>&4 || exit 1
+    mkdir -p "$tsk_root_dir/run" 2>&4 || exit 1
     cd "$tsk_root_dir/run"
 
     # Run the before:all hook if defined
@@ -774,7 +764,6 @@ _run_testfile_tests() {
 # TODO: test running tests in the testfile in parallel
 # testing hierarchy:
 # - tsk_root_dir         root for this particular testfile
-#   - cache              a directory shared by all tests in the testfile
 #   - run                the current test's cwd, empty at start of test (TODO: parallel?)
 #   - test-mocks         directory containing the current test's mocks
 #   - test-stdout        file, the current test's stdout
