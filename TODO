@@ -5,7 +5,7 @@ This file is a backlog of ideas. Here they are, in no particular order...
 ---
 
 Two most important changes now that it's clear that requiring tests to clean up after themselves is too overbearing:
-- make it so tests don't need to clean up (and add a test for cleaning upwrite-protected files)
+- make it so tests don't need to clean up (and add a test for cleaning up write-protected files)
 - make it so tests don't need to use a framework assert to be considered a pass. No error? Pass.
 
 ---
@@ -18,6 +18,30 @@ Bash indented heredocs (<<-EOF) don't work because they need to be indented usin
 not easy to edit.
 
 Good suggestions here: https://stackoverflow.com/questions/33815600/indenting-heredocs-with-spaces
+
+---
+
+Get rid of the redirections. If my test prints something, I want it to appear on stdout.
+(of course, we can make the result yellow instead of green if something was printed ...)
+
+---
+
+I think it's worth experimenting with getting rid of stdout_is and the "magic"
+output handling. Instead, we should make it easy to use a helper function to
+verify file contents. This way (and this is big) we don't have to redirect
+stdout and stderr while the test is running!
+
+---
+
+If we run each test in a subshell and in its own directory, all in parallel,
+we can make fail and abort work the way we'd expect: stop the test right then
+and return a result. That also takes care of leaking environment variables.
+
+It just can't be slow.
+
+---
+
+Do something about the run_tests boilerplate that's copypasted into half of our testfiles.
 
 ---
 
@@ -61,6 +85,18 @@ and produce something that works.
 
 AND IF ALL THIS IS TRUE, then we should probably remove the assertion counter too.
 That's going to be seriously misleading when people are doing their own assertions.
+
+---
+
+Is there any way to unify argument handling and config files? For instance,
+I should be able to set defaults for any argument in test-config.sh, including
+argument validation.
+
+---
+
+Should use bash associative arrays: _tsk_globals[testfile], _tsk_args[keep_artifacts], etc
+That should cut down on the confusion and polluting of variable names.
+Bash doesn't have multidimesional associative arrays though.
 
 ---
 
@@ -269,6 +305,12 @@ UPDATE: except subshells take time. This will need some research.
 ---
 
 ensure the test directory is chmod 700 so attackers can't access in-progress tests
+
+---
+
+I'm not sure if the results should be printed in yellow or green if some tests were
+skipped. Right now it's yellow, but it's starting to appear like having skipped tests
+might be a sign of a growing healthy program, not something going wrong.
 
 
 ## Done

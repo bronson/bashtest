@@ -5,13 +5,14 @@
 # Guiding Principles
 #
 #  - Tests are meant to look and act like bash code. Familiarity is key.
-#  - Testing is as self-contained as possible, nothing to install on the host.
-#  - Test output should contain enough information to see what went wrong.
-#  - the API should be clean and readable; no need to use things named _ or tsk_.
+#  - Testing is as self-contained as possible. There's nothing to install on the host.
+#  - Test output should contain enough information to see what went wrong and what to do next.
 #
-# Tests are run with an empty writeable directory as the CWD. They
-# are expected to leave this directory empty when they're finished,
-# otherwise the test fails. TODO
+# Tests are
+# - run with an empty writeable directory as the CWD.
+# - run in any order.
+# - completely independent and isolated. It's an error if they rely on each other.
+# - must not produce any output on stdout or stderr.
 #
 # If your test produces output on stderr, make sure to check it,
 # otherwise the test will fail. If you want to
@@ -32,7 +33,7 @@
 #: When a test is running, the current working directory is set
 #: to an empty scratch directory. The test should make no assumption
 #: about where this directory is stored; it might be in your project
-#: directory, it might be in /tmp, and it might be on a magic ramdisk
+#: directory, it might be in /tmp, and it might be on an exotic ramdisk
 #: somewhere.
 #:
 #: Your test can also access these directories:
@@ -43,6 +44,7 @@
 #: - framework_dir: The directory containing the run-tests script.
 #:   If you have a helper script in the same directory as the run-tests
 #:   script, you can include it like this: `$(framework_dir)/helper.sh`
+#:   (and $(framework_dir)/test-config.sh is loaded automatically)
 #:
 #: ### Lifecycle Hooks
 #:
@@ -52,14 +54,6 @@
 #: - before:each: Runs before each test, receives the test name as an argument.
 #: - after:each: Runs after each test, receives the test name as an argument. Can perform assertions on the test output.
 #: - after:all: Runs once after all tests have completed.
-#:
-#: ## The Testfile
-#:
-#: Testfiles start by including the test framework:
-#:
-#: ```bash
-#: source "$(dirname "$BASH_SOURCE")/../run-tests.sh"
-#: ```
 
 if [ -n "$tsk_framework_file" ]; then
     # test harness is already loaded, don't load again.
@@ -80,6 +74,7 @@ fi
 # Store the path to the run-tests.sh script for later use
 tsk_orig_cwd="$(pwd)"     # save the directory we were started in
 tsk_framework_file="$(readlink -f "${BASH_SOURCE[0]}")"
+tsk_framework_dir="$(dirname "$tsk_framework_file")"
 tsk_repeat=1              # the number of times to repeat the entire test run
 
 # if config files exclude any directories, they're stored here until argumets are processed
@@ -124,415 +119,10 @@ tsk_benchmark_total_time=0
 # tests have their output redirected to files so we need to:
 exec 3>&1 4>&2 # save stdout and stderr to FDs 3 and 4
 
+. "$tsk_framework_dir/lib/test-api.sh"
+. "$tsk_framework_dir/lib/run-testfiles-fork.sh"
+. "$tsk_framework_dir/lib/arguments.sh"
 
-#
-#    The API available to tests...
-#
-
-_compare() {
-    local op=$1 expected=$2 actual=$3
-
-    tsk_test_assertions=$((tsk_test_assertions + 1))
-    if [ ! x"$expected" "$op" x"$actual" ]; then
-       _add_error "line $(_line_number 2): ${FUNCNAME[1]} $(_format_diff "$expected" "$actual")"
-    fi
-}
-
-is_eq() { _compare '=' "$1" "$2"; }
-is_neq() { _compare '!=' "$1" "$2"; }
-
-# TODO: file_contains? stdout_contains?
-stderr_contains() {
-    local expected_text="$1"
-
-    tsk_test_assertions=$((tsk_test_assertions + 1))
-    tsk_stderr_checked=true
-
-    if ! grep -q "$expected_text" "$tsk_root_dir/test-stderr"; then
-        _add_error_with_stderr "stderr_contains line $(_line_number): stderr doesn't contain: '$expected_text'"
-    fi
-}
-
-pause() {
-    # TODO: make sure other tests aren't running simultaneously
-    # TODO: export relevant variables and (export -f) functions
-    # TODO: if the interactive shell exits with an error, stop testing.
-
-    local prompt_msg="${1:-Test paused. Type 'exit' to continue.}"
-
-    exec 5>&1 6>&2  # save the current test's stdout/stderr
-    exec 1>&3 2>&4  # Restore original stdout/stderr for interactive use
-
-    printf "\n\n\n=== PAUSED $tsk_test_name at line $(_line_number) ===\n"
-    printf "$prompt_msg\n\n"
-    PS1="[PAUSED] \w $ " bash --norc -i
-    printf "=== RESUMING TEST ===\n\n"
-
-    exec 1>&5 2>&6
-}
-
-# One trailing newline, if present, is trimmed from stdout before comparison.
-# If you need to be pedantically correct about the presence of the final
-# newline, you'll have to check for it outside of this function.
-# TODO: this is not great.
-file_is() {
-    # TODO: this should be a utility function, then file_is calls it, matching stdout_is etc
-    local expected_text="$1"
-    local file_path="$2"
-    local call_name="${3:-file_is}"
-    local lineno="${4:-$(_line_number)}"
-
-    # if the expected text isn't in the argument, it's on stdin
-    if [ -z "$expected_text" ]; then
-        if read -t 0; then    # don't hang if data isn't there
-            expected_text="$(cat)"
-        fi
-    fi
-
-    tsk_test_assertions=$((tsk_test_assertions + 1))
-
-    if [ -z "$file_path" ] || [ ! -f "$file_path" ]; then
-        _add_error "line $lineno: $call_name couldn't open '$file_path'"
-        return
-    fi
-
-    local actual_text="$(cat "$file_path")"
-    if [ "$expected_text" != "$actual_text" ]; then
-        _add_error "line $lineno: $call_name $(_format_diff "$expected_text" "$actual_text")"
-    fi
-}
-
-stdout_is() {
-    file_is "$1" "$tsk_root_dir/test-stdout" stdout_is "$(_line_number)"
-}
-
-stderr_is() {
-    file_is "$1" "$tsk_root_dir/test-stderr" stderr_is "$(_line_number)"
-    tsk_stderr_checked=true
-}
-
-abort() {
-    # TODO: could run all tests in a subshell that keeps testing until abort is called.
-    # Abort exits the subshell and then the tests end normally.
-    local errmsg="line $(_line_number): $1"
-    printf "${CR} %02d ${RED}ABORT${NC} $tsk_testfile $errmsg\n" "$tsk_total_count" >&3
-    printf "${RED}All testing aborted.${NC}\n" >&3
-    exit 127
-}
-
-# Fails the test with the given message. NOTE: does not stop the test!
-# Bash can't leap up the stack without invoking slow subshells.
-#
-# Example:
-#     if [ ! -f myfile ]; then
-#         fail "myfile must exist during test"
-#         return
-#     fi
-
-fail() {    # TODO: test me!
-    _add_error "line $(_line_number): $1"
-}
-
-mock() {
-    local command="$1"
-    local behavior="$2"
-    local mock_dir="$tsk_root_dir/test-mocks"
-    local executable="$mock_dir/$command"
-
-    # Create the mock directory and add it to PATH if needed
-    if [ ! -d "$mock_dir" ]; then
-        mkdir -p "$mock_dir" 2>&4 || exit 1
-    fi
-
-    # Ensure we have an absolute path for the mock directory for PATH
-    mock_dir="$(readlink -f "$mock_dir")"
-    executable="$mock_dir/$command"
-
-    # Add mock dir to PATH only when the first mock is created
-    if [[ ":$PATH:" != *":$mock_dir:"* ]]; then
-        export PATH="$mock_dir:$PATH"
-    fi
-
-    cat > "$executable" << EOF
-#!/bin/bash
-$behavior
-EOF
-    chmod +x "$executable"
-}
-
-# Returns the directory of the currently running testfile
-testfile_dir() {
-    if [ -z "$tsk_testfile" ]; then
-        echo "Error: testfile_dir was called without a testfile!" >&4
-        exit 1
-    fi
-    dirname "$tsk_testfile"
-}
-
-# Returns the directory of the run-tests script
-framework_dir() {
-    dirname "$tsk_framework_file"
-}
-
-# returns the directory that every test starts in (unless before:each changes it?)
-# TODO: would there be a big speedup if these were variables instead of functions?
-test_dir() {
-    echo "$tsk_root_dir/run"
-}
-
-# call this when writing tests to dump its arguments immediately to the screen
-debug() {
-    echo "$@" >&3
-}
-
-# Called in a pre-hook or during the test, causes this test to be skipped.
-# Note that it can't actually exit the test so `skip; return` is a useful idiom.
-skip() {
-    tsk_skip_test=true
-}
-
-
-pluralize() {
-    local count=$1
-    local singular=$2
-    local plural=${3:-${singular}s}
-
-    if [ "$count" -eq 1 ]; then
-        echo "$singular"
-    else
-        echo "$plural"
-    fi
-}
-
-
-# Returns TRUE if the given directory is empty, FALSE if not.
-# Example: `is_empty $mydir || echo "$mydir is not empty"`
-# see research/creating-files/benchmark_test-empty for notes on this implementation
-is_empty() {
-    # -G generates filenames matching the pattern
-    compgen -G "$1/*" >/dev/null 2>&1 && return 1
-    compgen -G "$1/.[!.]*" >/dev/null 2>&1 && return 1
-    compgen -G "$1/.??*" >/dev/null 2>&1 && return 1
-    return 0
-}
-
-
-# Creates a file in the current directory. Will be removed when the test finishes.
-# Colon and whitespace at the beginning of the line are removed. This allows you
-# to intend the file in your source code, and strip the indentation when it's used.
-#
-# Example: `create_file my_file.txt <<EOF`
-#     : This code will stay indented:
-#     :      something() {
-#     :          echo it works yo
-#     :      }
-# EOF
-
-create_file() {
-    if [ ! -t 0 ]; then    # prevent hanging if no input supplied
-        cat | sed 's/^[ \t]*: //'
-    fi > "$1"
-    at_cleanup "rm -f '$(realpath "$1")'"   # use absolute dir when cleaning up
-}
-
-# creates a directory that gets cleaned up when the test finishes.
-# TODO: this function sucks. It doesn't even support -p.
-create_dir() {
-    mkdir "$1"    # can't use -p because when `rm $1` only the subdir would be removed.
-    at_cleanup "rm -rf '$(realpath "$1")'"   # use absolute dir when cleaning up
-}
-
-# Add a custom cleanup action to be executed when the test finishes.
-# Note that tests can change directories, so the cleanup action should
-# be very careful what it relies upon.
-at_cleanup() {
-    tsk_cleanup_actions+=("$1")
-}
-
-# Execute all registered cleanup actions in reverse order (LIFO)
-_run_cleanup() {
-    local i
-    for ((i=${#tsk_cleanup_actions[@]}-1; i>=0; i--)); do
-        eval "${tsk_cleanup_actions[i]}" 2>/dev/null || true
-    done
-}
-
-
-# Prevents the given testfiles and directories from automatically being included in test runs.
-# (excluded files/dirs can still be run by naming them explicitly on the command line)
-exclude_directory() {
-    case "$1" in
-        *[\*\?\[\]\\]*) abort "invalid filename: '$excluded_dir'" ;;
-    esac
-    tsk_excluded_dirs+=("$1")
-}
-
-
-#
-#    Internal code to run the tests
-#
-
-_expand_directory() {
-    local find_args=("$1")
-    local excluded_dir
-
-    # prune any excluded directories
-    for excluded_dir in "${tsk_excluded_dirs[@]}"; do
-        find_args+=("-path" "*/$excluded_dir" "-prune" "-o")
-    done
-    # match .test and .skip files
-    find_args+=("-type" "f" "(" "-name" "*.test" "-o" "-name" "*.skip" ")" "-print0")
-    # run find, sort it, and stuff its results into the testfiles array
-    while IFS= read -r -d '' testfile; do
-        testfiles+=("$testfile")
-    done < <(find "${find_args[@]}" | sort -z)
-}
-
-# also ensures the number is positive
-_ensure_numeric_argument() {
-    if ! [[ "$2" =~ ^[0-9]+$ ]]; then
-        echo "invalid $1 argument: $2" >&2
-        exit 1
-    fi
-}
-
-_process_arguments() {
-    local arguments=()
-    testfiles=() # TODO: declare this global list of testfiles
-    max_jobs=12  # not the fastest but should be reasonably close
-
-    # If the test harness is being sourced from a testfile, add the testfile.
-    if [ -n "$tsk_launched_file" ]; then
-        arguments+=("$tsk_launched_file")
-    fi
-
-    # TODO: if a directory is specified, add all .test files in that directory
-    # TODO: should we care about whether a testfile argument ends in '.test'?
-    while (( "$#" )); do case $1 in
-        -b|--benchmark) tsk_benchmark_enabled=true; shift;;
-        -d|--diff) tsk_use_diff=true; shift;;
-        -e|--exclude) exclude_directory "$2"; shift; shift;;
-        --exclude=*) exclude_directory "${1#*=}"; shift;;
-        -f|--formatter) tsk_test_formatter="$2"; shift; shift;;
-        --formatter=*) tsk_test_formatter="${1#*=}"; shift;;
-        -j|--jobs) max_jobs="$2"; shift; shift;;
-        --jobs=*) max_jobs="${1#*=}"; shift;;
-        -k|--keep) tsk_keep_artifacts=true; shift;;
-        -m|--matching) tsk_match_utility="grep $2"; shift; shift;;
-        --matching=*) tsk_match_utility="grep ${1#*=}"; shift;;
-        -r|--repeat) tsk_repeat="$2"; shift; shift;;
-        --repeat=*) tsk_repeat="${1#*=}"; shift;;
-        -w|--watch) WATCH=true; shift;;               # TODO
-        *) arguments+=("$1"); shift;;
-    esac; done
-
-    _ensure_numeric_argument "max jobs" "$max_jobs"
-    _ensure_numeric_argument "repeat" "$tsk_repeat"
-
-    # If no files or directories were specified, run all files in the cwd.
-    if [ ${#arguments[@]} -eq 0 ]; then
-        arguments+=(".")
-    fi
-
-    # expand the arguments into an array of testfiles
-    for arg in "${arguments[@]}"; do
-        if [ -d "$arg" ]; then
-            _expand_directory "$arg"
-        elif [ -f "$arg" ]; then
-            testfiles+=("$arg")
-        else
-            abort "Could not find $arg"
-        fi
-    done
-
-    if [ ${#testfiles[@]} -eq 0 ]; then
-        echo "No testfiles found. Testfile names must end in '.test'." >&2
-        exit 120
-    fi
-}
-
-# returns the line number of the caller of the given frame
-# defaults to the caller of the function calling _line_number
-_line_number() {
-    local frame=${1:-1}
-    local info=$(caller "$frame")
-    echo "${info%% *}"
-}
-
-# used to quote large content in the test output, like stderr
-_blockquote() {
-    echo -n "$1" | sed 's/^/    | /'
-}
-
-_format_diff() {
-    local expected="$1" actual="$2"
-
-    # if the user asked for a diff, provide it
-    if [ "$tsk_use_diff" = true ]; then
-        local diff_output="$(diff -u <(echo "$expected") <(echo "$actual") | tail -n +4)"
-        if [[ -n "$diff_output" ]]; then
-            echo "diff:"$'\n'"$(_blockquote "$diff_output")"
-            return
-        fi
-    fi
-
-    # For short single-line content, use simple quoted format
-    if [[ "$expected" != *$'\n'* && "$actual" != *$'\n'* &&
-          ${#expected} -lt 30 && ${#actual} -lt 30 ]]; then
-        echo "expected '$expected', got '$actual'"
-        return
-    fi
-
-    # Otherwise, quote the full files
-    echo "expected:"$'\n'"$(_blockquote "$expected")"$'\n'"    but got:"$'\n'"$(_blockquote "$actual")"
-}
-
-# todo? make line number and function name automatic?
-_add_error() {
-    tsk_test_error_messages+=("$1")
-}
-
-# same as _add_error, but includes a few lines of stderr after the message
-_add_error_with_stderr() {
-    local message="$1"
-    local snippet="$(head -n 20 "$tsk_root_dir/test-stderr")"
-    message="$message"$'\n'"$(_blockquote "$snippet")"
-    _add_error "$message"
-}
-
-# used to test the API assertion calls: if an assertion failed,
-# but was expected, then the failure is cleared and the test passes.
-_expect_error() {
-    local expected_message="$1"
-
-    tsk_test_assertions=$((tsk_test_assertions + 1))
-
-    # if nothing threw an error, that's an error.
-    if [ ${#tsk_test_error_messages[@]} -eq 0 ]; then
-        _add_error "line $(_line_number): _expect_error - expected error message: '$expected_message', but no errors were reported"
-        return
-    fi
-
-    # Get the most recent error message
-    local last_idx=$((${#tsk_test_error_messages[@]} - 1))
-    local last_message="$(echo "${tsk_test_error_messages[last_idx]}" |
-        sed -E 's/line [0-9]+:/line nnn:/g')"
-
-    if [ "$expected_message" = "$last_message" ]; then
-        # the error was expected so it gets cleared
-        unset "tsk_test_error_messages[last_idx]"
-    else
-        # the error we expected was not the error we got
-        tsk_test_error_messages[last_idx]="line $(_line_number): _expect_error $(_format_diff "$expected_message" "$last_message")"
-    fi
-}
-
-# at the end of the test, all mocks are removed
-# TODO: one day we might want to set up mocks once and
-# then run them in multiple tests.
-_cleanup_mocks() {
-    rm -rf "$tsk_root_dir/test-mocks"/* "$tsk_root_dir/test-mocks"/.*
-}
 
 _check_for_abandoned_files() {
     # Count all files (including hidden ones)
@@ -648,6 +238,7 @@ _list_formatter_test_summary() {
     echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${assertions}${NC}" >&3
 }
 
+# runs a single test from a testfile
 _run_test() {
     [ -n "$tsk_skip_test" ] && return
     exec 1>"$tsk_root_dir/test-stdout" 2>"$tsk_root_dir/test-stderr"
@@ -698,7 +289,7 @@ _compute_test_result() {
     fi
 }
 
-_run_testfile_tests() {
+_run_testfile() {
     local tsk_testfile="$1"
 
     # in case the user named a ".skip" file on the command line
@@ -713,6 +304,9 @@ _run_testfile_tests() {
         for func in $(compgen -A function test:); do
             unset -f "$func"
         done
+        # What about the before/after:all hooks?
+        # Answer: right now they replace the launched testfile's functions.
+        # But, if we convert them to hooks, we need to remove the launched testfile's hooks.
 
         # convert to aboslute path because we'll be running the test
         # in a different directory than the cwd
@@ -795,43 +389,8 @@ _prepare_test_environment() {
     [ -f "$config_file" ] && source "$config_file"
 }
 
-# given a testfile, ensure we return a unique name for this test
-# (even if other testfiles have the same identical name)
-_get_testfile_unique_dirname() {
-    local testfile="$1"
-    local filename="${testfile##*/}"     # remove leading directories
-    filename="${filename%.test}"   # remove trailing ".test"
-    echo "$filename--$testfile_count"
-}
 
-_run_multiple_testfiles() {
-    running_jobs=0   # TODO _tsk these?
-    testfile_count=0
-
-    for testfile in "${testfiles[@]}"; do
-        testfile_count=$((testfile_count + 1))
-        if [ "$running_jobs" -ge "$max_jobs" ]; then
-            wait -n
-            running_jobs=$((running_jobs - 1))
-        fi
-
-        (
-            tsk_root_dir="$tsk_root_dir/$(_get_testfile_unique_dirname "$testfile")"
-            _run_testfile_tests "$testfile"
-            if [ "$tsk_fail_count" -gt 0 ]; then
-                echo -e "  ${RED}✗${NC} $testfile: $tsk_fail_count $(pluralize $tsk_fail_count test) failed" >> "$tsk_root_dir/fail-results"
-            fi
-            if [ "$tsk_skip_count" -gt 0 ]; then
-                echo -e "  ${YELLOW}○${NC} $testfile: $tsk_skip_count $(pluralize $tsk_skip_count test) skipped" >> "$tsk_root_dir/skip-results"
-            fi
-        ) &
-        running_jobs=$((running_jobs + 1))
-    done
-
-    wait  # wait for the remaining jobs to finish
-}
-
-_run_tests() {
+_run_all_tests() {
     if [ "$tsk_benchmark_enabled" = true ]; then
         tsk_benchmark_start_time=$(date +%s%N)  # epoch seconds + nanoseconds
     fi
@@ -839,11 +398,11 @@ _run_tests() {
     # if the user supplies a single testfile, we show a more verbose output than if they're running multiple
     if [ ${#testfiles[@]} -eq 1 ]; then
         tsk_test_formatter="${tsk_test_formatter:-list}"
-        _run_testfile_tests "${testfiles[0]}"
+        _run_testfile "${testfiles[0]}"
     else
         # TODO: need to print failures and results when running multiple test files
         tsk_test_formatter="${tsk_test_formatter:-dot}"
-        _run_multiple_testfiles
+        _run_testfiles
     fi
 
     _${tsk_test_formatter}_formatter_test_summary
@@ -856,9 +415,9 @@ _run_tests() {
 }
 
 # TODO: if we're benchmarking, can we summarize the results?
-_repeat_tests() {
+_repeat_all_tests() {
     while [ "$tsk_repeat" -gt 0 ]; do
-        ( _run_tests )
+        ( _run_all_tests )
         local exit_code="$?"
         if [ "$exit_code" -ne 0 ]; then
             exit "$exit_code"
@@ -874,9 +433,11 @@ _repeat_tests() {
 
 _prepare_test_environment
 _process_arguments "$@"
-_repeat_tests
+_repeat_all_tests
 
 # Clean up if not in watch mode and not keeping artifacts
 if [ "$tsk_keep_artifacts" != true ]; then
     rm -rf "$tsk_root_dir"
+else
+    echo "test directory was $tsk_root_dir"
 fi

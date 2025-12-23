@@ -166,9 +166,12 @@ test:subtest_directories() {
     is_eq "" "$(ls -A)"
 
     cd "$(framework_dir)/fixtures/numbered"
-    run_tests one.test -f test --keep
+    run_tests one.test -f test --keep | \
+        sed 's/bashtest-[a-zA-Z1-9]*/bashtest-UNIQUE/' |
+        sed 's/\/01-launching--[0-9]*//'  # TODO: this is too tight a dependency on naming
     stdout_is <<EOF
 pass test:one
+test directory was /tmp/bashtest-UNIQUE/run/bashtest
 EOF
     cd "$(test_dir)"
 
