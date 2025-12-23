@@ -1,0 +1,21 @@
+#!/bin/bash
+
+if [ -z "$1" ] || [ -z "$2" ]; then
+    echo "Usage: $0 <number of files> <number of tests per file> [more_code]"
+    echo "For example: $0 16 256"
+    echo "         or: $0 16 256 'sleep 0.01'"
+    exit 1
+fi
+
+num_files="$1"
+tests_per_file="$2"
+more_code="${3:-:}"
+
+rm -f test-*.test
+for i in $(seq "$1"); do
+    # Format the number with just enough leading zeroes
+    formatted_num=$(printf "%0${#num_files}d" "$i")
+    for j in $(seq "$tests_per_file"); do
+        echo "test:$j() { $more_code; is_eq 1 1; }"
+    done > "test-${formatted_num}.test"
+done
