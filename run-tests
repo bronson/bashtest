@@ -122,6 +122,9 @@ exec 3>&1 4>&2 # save stdout and stderr to FDs 3 and 4
 . "$tsk_framework_dir/lib/test-api.sh"
 . "$tsk_framework_dir/lib/run-testfiles-fork.sh"
 . "$tsk_framework_dir/lib/arguments.sh"
+. "$tsk_framework_dir/lib/formatters/dot.sh"
+. "$tsk_framework_dir/lib/formatters/list.sh"
+. "$tsk_framework_dir/lib/formatters/test.sh"
 
 
 _check_for_abandoned_files() {
@@ -153,90 +156,7 @@ _print_test_error_messages() {
     fi
 }
 
-_test_formatter_pre_test() { :; }
 
-_test_formatter_post_test() {
-    echo "$1 $tsk_test_name" >&3
-    _print_test_error_messages
-}
-
-_test_formatter_test_summary() { :; }
-
-_dot_formatter_pre_test() { :; }
-
-_dot_formatter_post_test() {
-    case "$1" in
-        pass) echo -n '.' >&3 ;;
-        skip) echo -n 's' >&3 ;;
-        fail) echo -n 'F' >&3 ;;
-        *) echo -n 'E' >&3 ;;
-    esac
-}
-
-_dot_formatter_test_summary() {
-    echo # _dot_formatter_post_test doesn't print a final newline so here it is
-
-    # if any failure results exist, print them
-    local fail_files=("$tsk_root_dir"/*/fail-results)
-    if [ -f "${fail_files[0]}" ]; then
-        echo -e "${RED}Failed tests:${NC}" >&3
-        cat "${fail_files[@]}" >&3
-    fi
-
-    # if any skip results exist, print them
-    local skip_files=("$tsk_root_dir"/*/skip-results)
-    if [ -f "${skip_files[0]}" ]; then
-        echo -e "${YELLOW}Skipped tests:${NC}" >&3
-        cat "${skip_files[@]}" >&3
-    fi
-}
-
-# called before each test starts
-_list_formatter_pre_test() {
-    # only do this if we're pretty-printing to a terminal
-    if [ -n "$CR" ]; then
-        # no newline on this line, end_test will back up and print the result
-        printf " %02d ....   $tsk_test_name" "$tsk_total_count" >&3
-    fi
-}
-
-# called after each test is complete
-_list_formatter_post_test() {
-    local result
-    case "$1" in
-        pass) result="${GREEN}pass${NC}" ;;
-        skip) result="${YELLOW}skip${NC}" ;;
-        fail) result="${RED}FAIL${NC}" ;;
-        *) result="${RED}INTERNAL ERROR: ${result}${NC}" ;;
-    esac
-
-    local errmsg=''
-    local num_fails="${#tsk_test_error_messages[@]}"
-    if [ "$num_fails" -gt 0 ]; then
-        errmsg=" ($num_fails $(pluralize "$num_fails" "error"))"
-    fi
-
-    printf "$CR %02d $result   $tsk_test_name$errmsg\n" "$tsk_total_count" >&3
-    _print_test_error_messages
-}
-
-_list_formatter_test_summary() {
-    local color="$GREEN"
-
-    local skip_msg=""
-    if [ $tsk_skip_count -gt 0 ]; then
-        color="$YELLOW"
-        skip_msg=", ${tsk_skip_count} skipped"
-    fi
-
-    if [ $tsk_fail_count -gt 0 ]; then
-        color="$RED"
-    fi
-
-    local count="${tsk_total_count} $(pluralize "$tsk_total_count" "test")"
-    local assertions="${tsk_total_assertions} $(pluralize "$tsk_total_assertions" "assertion")."
-    echo -e "${color}$count: ${tsk_pass_count} passed, ${tsk_fail_count} failed${skip_msg}.   ${assertions}${NC}" >&3
-}
 
 # runs a single test from a testfile
 _run_test() {
