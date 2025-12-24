@@ -127,18 +127,6 @@ exec 3>&1 4>&2 # save stdout and stderr to FDs 3 and 4
 . "$tsk_framework_dir/lib/formatters/test.sh"
 
 
-_check_for_abandoned_files() {
-    # Count all files (including hidden ones)
-    local file_count=$(find . -mindepth 1 -maxdepth 1 | wc -l)
-
-    # If any files found, add an error
-    if [ "$file_count" -gt 0 ]; then
-        local files_list=$(find . -mindepth 1 -maxdepth 1 -printf "%f\n" | sort)
-        _add_error "test didn't clean up $(pluralize "$file_count" 'file'): $files_list"
-    fi
-}
-
-
 # Generates a list of test functions to run.
 _find_tests() {
     # or: `declare -F | cut -d" " -f3 | grep '^test:'`
@@ -148,6 +136,7 @@ _find_tests() {
     # in the file, not in whatever alphabetical order compgen returns.
 }
 
+
 _print_test_error_messages() {
     if [ ${#tsk_test_error_messages[@]} -gt 0 ]; then
         for msg in "${tsk_test_error_messages[@]}"; do
@@ -155,7 +144,6 @@ _print_test_error_messages() {
         done
     fi
 }
-
 
 
 # runs a single test from a testfile
@@ -188,10 +176,8 @@ _run_test() {
     if [ -s "$tsk_root_dir/test-stderr" ] && [ "$tsk_stderr_checked" = false ]; then
         _add_error_with_stderr "test produced stderr:"
     fi
-
-    # TODO
-    # _check_for_abandoned_files
 }
+
 
 _compute_test_result() {
     if [ $tsk_test_assertions -eq 0 ]; then
@@ -208,6 +194,7 @@ _compute_test_result() {
         tsk_test_result="fail"
     fi
 }
+
 
 _run_testfile() {
     local tsk_testfile="$1"
@@ -275,6 +262,7 @@ _run_testfile() {
     fi
 }
 
+
 # TODO: test running tests in the testfile in parallel
 # testing hierarchy:
 # - tsk_root_dir         root for this particular testfile
@@ -333,6 +321,7 @@ _run_all_tests() {
         echo -e "${GREEN}Running${NC} ${#testfiles[@]} ${GREEN}$(pluralize ${#testfiles[@]} testfile) took${NC} ${tsk_benchmark_total_time} ${GREEN}seconds${NC}"
     fi
 }
+
 
 # TODO: if we're benchmarking, can we summarize the results?
 _repeat_all_tests() {
